@@ -8,7 +8,7 @@ import { Activity, Shield, Swords, User, Map as MapIcon, Footprints, RotateCw } 
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- Global Audio Helper ---
-const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_click' | 'read_clear' | 'read_corrupt' | 'warning') => {
+const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_click' | 'read_clear' | 'read_corrupt' | 'warning' | 'move' | 'hit') => {
   try {
     const actx = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
@@ -130,6 +130,24 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
       gain.connect(actx.destination);
       osc.start();
       osc.stop(actx.currentTime + 4);
+    } else if (type === 'move') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, actx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(100, actx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0, actx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.1, actx.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.1);
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.start(); osc.stop(actx.currentTime + 0.1);
+    } else if (type === 'hit') {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(100, actx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(200, actx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0, actx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.3, actx.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.2);
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.start(); osc.stop(actx.currentTime + 0.2);
     }
   } catch(e) {
     console.error("Audio block", e);
@@ -243,9 +261,17 @@ interface GreenMidnightState {
   hitCooldown: number;
 }
 
+interface ChaseData {
+  playerRooms: number;
+  monsterDistance: number;
+  targetRooms: number;
+  speed: number;
+}
+
 interface GameState {
-  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination';
+  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing';
   combatData?: CombatData;
+  chaseData?: ChaseData;
   globalEventTimer: number;
   greenMidnight: GreenMidnightState;
   readingData?: ReadingData;
@@ -260,6 +286,7 @@ interface GameState {
   debugInvincibleCombat?: boolean;
   debugInfiniteSatiety?: boolean;
   debugShowPaths?: boolean;
+  debugGodMode?: boolean;
   divinationResult?: {
     card: 'hermit' | 'wheel' | 'hanged' | 'tower';
     timer: number;
@@ -764,12 +791,29 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
              className="absolute w-0 h-0 transition-transform duration-700 ease-out"
              style={{ 
                 left: '50%', top: '50%',
-                transform: `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
+                transform: s.status === 'chasing' && s.chaseData
+                    ? `scale(${zoom}) translate(${-s.chaseData.playerRooms * G_SPACING}px, 0px)`
+                    : `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
              }}
            >
              {/* Connections */}
              <svg className="absolute inset-0 overflow-visible pointer-events-none">
-               {MAP_EDGES.map(([u, v]) => {
+               {s.status === 'chasing' && s.chaseData ? (
+                 Array.from({ length: s.chaseData.targetRooms }).map((_, i) => {
+                    const isActiveLine = i === s.chaseData!.playerRooms || i === s.chaseData!.playerRooms - 1;
+                    return (
+                       <line 
+                          key={`chase-${i}`}
+                          x1={i * G_SPACING} y1={0} 
+                          x2={(i + 1) * G_SPACING} y2={0} 
+                          stroke={isActiveLine ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
+                          strokeWidth={isActiveLine ? 2 : 1}
+                          strokeDasharray={isActiveLine ? "none" : "none"}
+                          opacity={isActiveLine ? 0.6 : 0.2}
+                       />
+                    );
+                 })
+               ) : MAP_EDGES.map(([u, v]) => {
                   const isActiveLine = u === s.playerLoc || v === s.playerLoc;
                   if (!isActiveLine && !s.debugShowPaths) return null;
                   return (
@@ -803,7 +847,43 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
              </svg>
 
              {/* Rooms */}
-             {(Object.values(ROOMS) as RoomDef[]).map((r) => {
+             {s.status === 'chasing' && s.chaseData ? (
+                 Array.from({ length: s.chaseData.targetRooms + 1 }).map((_, i) => {
+                    const isCurrent = s.chaseData!.playerRooms === i;
+                    const isAdj = s.chaseData!.playerRooms + 1 === i;
+                    
+                    let boxCls = "border-theme-border/30 text-[#8b949e]";
+                    if (isCurrent) {
+                       boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
+                    } else if (isAdj) {
+                       boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
+                    }
+                    
+                    return (
+                      <button
+                         key={`chase-room-${i}`}
+                         onClick={() => { 
+                            if (isAdj) {
+                               s.chaseData!.playerRooms++;
+                               playSound('move');
+                            }
+                         }}
+                         disabled={!isAdj && !isCurrent}
+                         className={`absolute flex flex-col items-center justify-center transition-all bg-[var(--color-theme-bg)] ${boxCls}`}
+                         style={{
+                            left: `${i * G_SPACING}px`, top: `0px`,
+                            transform: 'translate(-50%, -50%)',
+                            width: '84px', height: '56px',
+                            borderWidth: '1px'
+                         }}
+                      >
+                         <span className="text-[12px] font-bold tracking-widest leading-tight">{i === s.chaseData!.targetRooms ? '出口' : '未知走廊'}</span>
+                         <span className="text-[9px] text-[#8b949e]/50 mt-[2px] leading-tight">? ? ?</span>
+                         {isCurrent && <div className="mt-[4px] w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" />}
+                      </button>
+                    );
+                 })
+             ) : (Object.values(ROOMS) as RoomDef[]).map((r) => {
                 const layout = ROOM_LAYOUT[r.id];
                 const isCurrent = s.playerLoc === r.id;
                 const isAdj = ROOMS[s.playerLoc].adj.includes(r.id);
@@ -854,11 +934,36 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                    </button>
                 );
              })}
+             {s.status === 'chasing' && s.chaseData && (
+                <div
+                   className="absolute flex items-center justify-center"
+                   style={{
+                      left: `${s.chaseData.monsterDistance * G_SPACING}px`, top: `0px`,
+                      transform: 'translate(-50%, -50%)',
+                      width: '40px', height: '40px',
+                      pointerEvents: 'none'
+                   }}
+                >
+                   <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping shadow-[0_0_80px_red]" />
+                   <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">追截虚无</span>
+                </div>
+             )}
            </div>
         </div>
 
         {/* Current Room Info */}
         <div className="w-full max-w-[360px] flex flex-col gap-2 mt-[15px] shrink-0">
+          {s.status === 'chasing' ? (
+             <div className="bg-red-900/10 border border-red-500/50 p-3 text-center animate-pulse">
+               <div className="flex items-center justify-center gap-2 mb-[4px]">
+                  <div className="w-2 h-2 bg-red-500 shadow-[0_0_5px_red]" />
+                  <div className="text-[16px] text-red-500 font-bold uppercase">正在逃亡</div>
+               </div>
+               <div className="text-[12px] opacity-80 text-red-400 font-mono">
+                 距离出口：{s.chaseData ? s.chaseData.targetRooms - s.chaseData.playerRooms : 0} 扇门
+               </div>
+             </div>
+          ) : (
           <div className="bg-theme-cyan/5 border border-theme-border p-3 text-center">
             <div className="flex items-center justify-center gap-2 mb-[4px]">
                <div className="w-2 h-2 bg-theme-cyan shadow-[0_0_5px_var(--color-theme-cyan)]" />
@@ -868,6 +973,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
               {room.attrs.length > 0 ? `当前环境辐射 | ${room.attrs.map(a => ATTR_NAMES[a]).join(' · ')}` : '绝对安全区域 | 属性无变动'}
             </div>
           </div>
+          )}
           
           {room.id === 'Dungeon' && s.beast.state === 'contained' && (
             <div className="bg-[#1a0000] border border-theme-red p-3 flex flex-col justify-center">
@@ -933,6 +1039,27 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                  className={`w-full h-[36px] text-[12px] border border-yellow-500 uppercase transition-colors ${s.divinationCooldown <= 0 ? 'text-yellow-500 hover:bg-yellow-500/10 cursor-pointer' : 'text-yellow-500/30 border-yellow-500/20 cursor-not-allowed'}`}
                >
                  {s.divinationCooldown > 0 ? `星象紊乱 [ ${Math.ceil(s.divinationCooldown)}s ]` : '[ 凝注群星 ] 进行占卜'}
+               </button>
+            </div>
+          )}
+
+          {room.id === 'ShadowCorridor' && (
+            <div className="flex flex-col gap-2 p-3 bg-[#2a111a] border border-[#aa5555]">
+               <div className="text-[10px] text-red-400/80 uppercase font-bold text-center border-b border-[#aa5555]/50 pb-1 mb-1">异空间入口</div>
+               <button 
+                 onClick={() => {
+                   s.status = 'chasing';
+                   s.chaseData = {
+                     playerRooms: 0,
+                     monsterDistance: -2, // Starts slightly behind
+                     targetRooms: 20,
+                     speed: 1.5 // rooms per second
+                   };
+                   addLog(s, `🏃 [警告] 你踏入了一条望不到尽头的长廊，身后传来令人不寒而栗的快速脚步声...`);
+                 }}
+                 className="w-full h-[36px] text-[12px] border border-red-500 text-red-500 uppercase transition-colors hover:bg-red-500/10 cursor-pointer"
+               >
+                 [ 踏入长廊 ] 未知追截
                </button>
             </div>
           )}
@@ -1224,7 +1351,7 @@ const CombatDialogOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<Ga
                                     className="absolute inset-0 bg-gradient-to-l from-theme-cyan/50 to-transparent pointer-events-none"
                                 />
                              )}
-                             {nWon && !s.debugInvincibleCombat && (
+                             {nWon && !(s.debugInvincibleCombat || s.debugGodMode) && (
                                 <motion.div 
                                     initial={{ x: '0%', opacity: 1 }}
                                     animate={{ x: '100%', opacity: 0 }}
@@ -1494,6 +1621,31 @@ export default function App() {
        return;
     }
 
+    if (state.status === 'chasing') {
+        const cd = state.chaseData;
+        if (!cd) return;
+        cd.monsterDistance += cd.speed * dt;
+        
+        if (cd.monsterDistance >= cd.playerRooms) {
+            // caught
+            if (state.debugGodMode) {
+               addLog(state, '🟢 追逐战拦截：怪物触碰了你，但你处于【虚空无敌】状态，免于死亡。');
+               cd.monsterDistance = cd.playerRooms - 1; // push monster slightly back
+            } else {
+               addLog(state, '🔴 追逐战失败：身后的恶物将你拖入了虚无。');
+               state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+               state.status = 'gameover';
+               state.chaseData = undefined;
+            }
+        } else if (cd.playerRooms >= cd.targetRooms) {
+            // escaped
+            addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的追击，回到了密道。');
+            state.status = 'playing';
+            state.chaseData = undefined;
+        }
+        return;
+    }
+
     if (state.status === 'combat' && state.combatData) {
        const cd = state.combatData;
        const npc = state.npcs.find(n => n.id === cd.npcId);
@@ -1530,7 +1682,7 @@ export default function App() {
                   pWins++;
                   totalStolen += res.stealAmt;
               } else if (res.winner === 'npc') {
-                  if (!state.debugInvincibleCombat) {
+                  if (!(state.debugInvincibleCombat || state.debugGodMode)) {
                       state.playerAttrs[res.attr] -= res.stealAmt;
                       npc.attrs[res.attr] += res.stealAmt;
                       totalLost += res.stealAmt;
@@ -1553,7 +1705,7 @@ export default function App() {
               }
           } else if (nWins > pWins) {
                cd.dialogText = FAILURE_TEXTS[npc.color] || '遭到重创';
-               if (state.debugInvincibleCombat) {
+               if ((state.debugInvincibleCombat || state.debugGodMode)) {
                    cd.dialogText += '\n\n[Dev] 不死身免疫开启，未被夺走属性！';
                    addLog(state, `🤖 免疫 ${totalLost.toFixed(1)} 点削弱。`);
                } else {
@@ -1654,7 +1806,7 @@ export default function App() {
                }
             }
 
-            if (isHit && state.invisibilityTimer <= 0 && !state.debugInfiniteInvisibility) {
+            if (isHit && state.invisibilityTimer <= 0 && !(state.debugInfiniteInvisibility || state.debugGodMode)) {
                 const totalHP = calcHP(state.playerAttrs);
                 const toLoseTotal = totalHP * 0.3;
                 let toLose = toLoseTotal;
@@ -1791,7 +1943,7 @@ export default function App() {
           addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
 
           if (b.loc === state.playerLoc) {
-             if (state.debugInfiniteInvisibility) {
+             if ((state.debugInfiniteInvisibility || state.debugGodMode)) {
                 // addLog(state, '⚠️ 狂暴怪物穿过了你，但未能察觉隐匿在阴影中的你。');
              } else {
                 addLog(state, '💀 你被突脸的狂暴怪物瞬间撕碎。游戏结束。');
@@ -1910,7 +2062,7 @@ const playAbsorbSound = () => {
          return; 
       }
 
-      if (state.invisibilityTimer > 0 || state.debugInfiniteInvisibility) {
+      if (state.invisibilityTimer > 0 || (state.debugInfiniteInvisibility || state.debugGodMode)) {
          return;
       }
 
@@ -2172,6 +2324,19 @@ const playAbsorbSound = () => {
                  className="w-3 h-3 accent-blue-500"
                />
                无限以太虚无 (绝对隐身)
+             </label>
+
+             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+               <input 
+                 type="checkbox" 
+                 checked={!!s.debugGodMode}
+                 onChange={(e) => {
+                   stateRef.current.debugGodMode = e.target.checked;
+                   forceRender();
+                 }}
+                 className="w-3 h-3 accent-red-500"
+               />
+               无敌状态 (隐身+免疫怪物与环境致死)
              </label>
 
              <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
