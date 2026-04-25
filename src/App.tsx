@@ -1361,7 +1361,7 @@ const CombatSidebarPanel = ({ stateRef }: { stateRef: React.MutableRefObject<Gam
   const roomName = ROOMS[cd.roomId].name;
 
   return (
-    <div className="flex flex-col shrink-0 mb-4 pb-4 border-b border-theme-red/50 relative">
+    <div className="flex flex-col mb-4 pb-4 border-b border-theme-red/50 relative">
       <div className="absolute inset-0 bg-theme-red/5 animate-pulse rounded pointer-events-none"></div>
 
       <div className="text-[12px] text-theme-red font-bold uppercase border-b border-theme-red/40 pb-1 mb-3 shrink-0 flex items-center justify-between px-1 relative">
@@ -1387,7 +1387,7 @@ const NpcStatePanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameStat
   const aliveNpcs = s.npcs.filter(n => !n.isDead);
 
   return (
-    <div className="flex flex-col shrink-0 mb-4 pb-4 border-b border-theme-border/50">
+    <div className="flex flex-col mb-4 pb-4 border-b border-theme-border/50">
       <div className="text-[12px] text-theme-red uppercase border-b border-theme-red/40 pb-1 mb-3 shrink-0 flex items-center justify-between">
         <span className="flex items-center gap-1">
           <Activity size={14} /> 敌对目标探测 ({aliveNpcs.length})
@@ -1405,7 +1405,7 @@ const NpcStatePanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameStat
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+      <div className="space-y-4 pr-1">
         {aliveNpcs.map(npc => {
           const hp = calcHP(npc.attrs);
           const room = ROOMS[npc.loc];
@@ -1464,11 +1464,11 @@ const LogsPanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameState> }
 
   return (
     <React.Fragment>
-      <div className="text-[12px] text-theme-cyan uppercase border-b border-theme-border pb-1 mb-3 shrink-0 flex items-center gap-2">
+      <div className="text-[12px] text-theme-cyan uppercase border-b border-theme-border pb-1 mb-3 flex items-center gap-2">
         通信日志
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-1 text-[12px] leading-[1.6] text-[#8b949e]">
+      <div className="pr-1 text-[12px] leading-[1.6] text-[#8b949e]">
         {s.logs.map((log, idx) => {
           const isDanger = log.includes('⚔️') || log.includes('💀') || log.includes('🔴');
           const isCombatSystem = log.includes('警告') || log.includes('遭遇战');
@@ -2805,7 +2805,7 @@ export default function App() {
         <CombatDialogOverlay stateRef={stateRef} />
 
         {/* Right Column: Logs */}
-        <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-hidden shrink-0 relative">
+        <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-y-auto shrink-0 relative custom-scrollbar">
           {s.status === 'combat' ? (
             <CombatSidebarPanel stateRef={stateRef} />
           ) : (
