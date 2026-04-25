@@ -419,7 +419,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'playing' | 'gameover' | 'reading' | 'divination' | 'combat' | 'shop_intro' | 'shop' | 'passage_intro' | 'passage_failure' | 'passage_victory' | 'inventory' | 'belltower_intro' | 'belltower_rung' | 'watchtower_intro';
+  status: 'playing' | 'gameover' | 'reading' | 'divination' | 'combat' | 'shop_intro' | 'shop' | 'passage_intro' | 'passage_failure' | 'passage_victory' | 'inventory' | 'belltower_intro' | 'belltower_rung' | 'watchtower_intro' | 'yard_cat';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -473,6 +473,8 @@ interface GameState {
   showRoomDesc: boolean;
   roomEggStates: Record<string, { phase: number; progress: number }>; // phase 0: hidden, 1: typing, 2: done
   kitchenChoice: ItemType | null;
+  catFeedResult: 'none' | 'cat_food' | 'chicken_breast' | 'rice_oil' | 'kicked' | null;
+  catKickCountdown: number;
 }
 
 // --- Logic Helpers ---
@@ -608,6 +610,8 @@ function getInitialGameState(): GameState {
     showRoomDesc: false,
     roomEggStates: {},
     kitchenChoice: null,
+    catFeedResult: null,
+    catKickCountdown: 0,
     logs: ['[系统] 欢迎来到《Encounter 遭遇》。由于处于超重力区域，总属性上限受限，请先分配你的初始 20 点属性。'],
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
@@ -1616,7 +1620,26 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination, f
             </div>
           )}
 
+          {room.id === 'Yard' && s.roomEggStates['Yard']?.phase === 2 && (
+            <div className="flex flex-col gap-2 p-3 bg-[#0a0810] border border-[#3a2060] shadow-[0_0_15px_rgba(90,30,180,0.15)]">
+              <div className="text-[10px] text-[#a080d0] font-bold uppercase text-center border-b border-[#3a2060]/50 pb-1 mb-1 tracking-[2px]">
+                城门庭院 · 感官屏障
+              </div>
+              <button
+                onClick={() => {
+                  s.status = 'yard_cat';
+                  s.catFeedResult = null;
+                  forceRender();
+                }}
+                className="w-full h-[36px] text-[12px] border border-[#7040c0] text-[#c0a0e0] uppercase transition-all hover:bg-[#7040c0]/20 hover:text-[#e0c0ff] cursor-pointer font-bold shadow-[0_0_10px_rgba(100,40,200,0.2)]"
+              >
+                [ 接近黑猫 ] 进入感官屏障
+              </button>
+            </div>
+          )}
+
           {room.id === 'Watchtower' && (
+
             <div className="flex flex-col gap-2 p-3 bg-[#060a12] border border-[#1a2a40] shadow-[0_0_15px_rgba(30,80,180,0.15)]">
               <div className="text-[10px] text-blue-400 font-bold uppercase text-center border-b border-blue-900/50 pb-1 mb-1 tracking-[2px]">
                 瞭望塔
@@ -3012,6 +3035,247 @@ const FAILURE_TEXTS: Record<string, string> = {
   '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
 };
 
+// --- Yard Cat Overlay ---
+const YardCatOverlay = ({ stateRef, forceRender, renderTick }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void, renderTick: number }) => {
+  const s = stateRef.current;
+  if (s.status !== 'yard_cat') return null;
+
+  const result = s.catFeedResult;
+  const hasCatFood = s.inventory.includes('cat_food');
+  const hasChickenBreast = s.inventory.includes('chicken_breast');
+  const hasRiceOil = s.inventory.includes('rice_oil');
+  const hasAnyFood = hasCatFood || hasChickenBreast || hasRiceOil;
+  const [feedExpanded, setFeedExpanded] = React.useState(false);
+  const [kickCountdown, setKickCountdown] = React.useState(5);
+
+  // Countdown for orange cat death
+  useEffect(() => {
+    if (result !== 'kicked') return;
+    if (kickCountdown <= 0) {
+      s.status = 'gameover';
+      forceRender();
+      return;
+    }
+    const t = setTimeout(() => setKickCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [result, kickCountdown]);
+
+  const doFeed = (item: 'cat_food' | 'chicken_breast' | 'rice_oil') => {
+    const idx = s.inventory.indexOf(item);
+    if (idx > -1) s.inventory.splice(idx, 1);
+    s.catFeedResult = item;
+
+    if (item === 'cat_food') {
+      addLog(s, '🐱 [城门庭院] 你蹲下身，向黑猫献上了一袋猫粮。它发出了轻微的呼噜声，随后隐入阴影。感官屏障消散了。');
+    } else if (item === 'chicken_breast') {
+      s.playerAttrs.patience = Math.max(0, snapVal(s.playerAttrs.patience - 5.0));
+      addLog(s, '🐱 [城门庭院] 黑猫"变凶"了——掠过你的手背！耐心 -5.0。感官屏障消散了。');
+    } else if (item === 'rice_oil') {
+      s.playerAttrs.strength = snapVal(s.playerAttrs.strength + 5.0);
+      addLog(s, '🐱 [城门庭院] 黑猫食米油，体态魁梧。你感到野性在血管中涌动。力量 +5.0。感官屏障消散了。');
+    }
+    forceRender();
+  };
+
+  const doKick = () => {
+    s.catFeedResult = 'kicked';
+    addLog(s, '🟠 [城门庭院] 你对黑猫抬起了脚。橘影浮现，哈气震碎灵魂……');
+    forceRender();
+  };
+
+  const leaveAfterFeed = () => {
+    s.status = 'playing';
+    s.catFeedResult = null;
+    forceRender();
+  };
+
+  // Result text map
+  const RESULT_TEXT: Record<string, React.ReactNode> = {
+    cat_food: (
+      <div className="text-[16px] sm:text-[17px] leading-[2.2] text-[#c8c8e0] font-serif tracking-wide text-justify indent-8">
+        你蹲下身，撕开包装袋。黑猫迈着优雅的步子走过来，埋头细细品味这份异界的馈赠。它舔了舔爪子，发出了轻微的呼噜声，随后抬头用那对金色的竖瞳静静地看了你一眼，便再次隐入阴影。
+        <br /><br />
+        <span className="text-theme-cyan italic">在这片充满恶意的废墟中，你赢得了一份微不足道、却又无比珍贵的善意。</span>
+      </div>
+    ),
+    chicken_breast: (
+      <div className="text-[16px] sm:text-[17px] leading-[2.2] text-[#e0c8c8] font-serif tracking-wide text-justify indent-8">
+        你将真空压缩的冻干鸡胸肉递到它面前。黑猫嗅了嗅，瞳孔瞬间收缩成一条细缝。<span className="italic text-[#f08080]">'基……凶……肉？'</span>你仿佛听到风中传来一声莫名的冷笑。
+        <br /><br />
+        下一秒，原本温顺的黑猫脊背高高隆起，喉咙里发出刺耳的咆哮，化作一道黑色闪电掠过你的手背！它变"凶"了——这不仅是生理上的变化，更像是某种因果律的恶意玩笑。你感觉到理智正在被这种荒谬的挫败感侵蚀。
+        <br /><br />
+        <span className="text-theme-red font-bold">（耐心 -5.0）</span>
+      </div>
+    ),
+    rice_oil: (
+      <div className="text-[16px] sm:text-[17px] leading-[2.2] text-[#d4e8d4] font-serif tracking-wide text-justify indent-8">
+        你旋开瓶盖，将琥珀色的米油滴落在石砖缝隙中。黑猫俯身舐吸，周身的毛发竟以肉眼可见的速度变得油光水滑，体态也随之魁梧了一圈。
+        <br /><br />
+        <span className="text-[#a0ffa0] italic">'猫儿食米油，百日则肥白。'</span>这只哈基米不仅变得强健，连眼神也透出了巡视领地的威压。看着它充满力量感的脊背，你感觉到自己的血管中也涌动起了某种名为"野性"的律动。
+        <br /><br />
+        <span className="text-theme-green font-bold">（力量 +5.0）</span>
+      </div>
+    ),
+    kicked: (
+      <div className="text-[16px] sm:text-[17px] leading-[2.2] text-[#ffa070] font-serif tracking-wide text-justify indent-8">
+        你对这只充满谜团的小生物失去了耐心，抬腿狠狠踢去。然而，你的脚尖在触碰到黑猫皮毛的瞬间便凝固了。
+        <br /><br />
+        一个巨大、浑圆、呈现诡异橙色的幻影在黑猫身后缓缓浮现——那是一只圆头橘猫的<span className="text-orange-400 font-bold">"替身"</span>。它甚至没有回头，只是发出一声震碎灵魂的狂暴<span className="text-orange-300 font-bold text-[20px] animate-bounce inline-block">"哈气"</span>音。空气瞬间被凝固的杀意填满，随后，世界陷入了永恒的黑暗。
+        <br /><br />
+        <span className="text-orange-500 font-bold">（你被"橘影"彻底抹除了。大橘为重，你不该招惹它。）</span>
+        <br /><br />
+        <span className="text-red-400 font-mono animate-pulse">游戏结束倒计时：{kickCountdown} 秒...</span>
+      </div>
+    ),
+  };
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/92 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className={`flex-1 border shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden flex flex-col ${result === 'kicked' ? 'bg-[#0f0500] border-[#6b3010] shadow-[0_0_50px_rgba(255,100,0,0.3)]' : 'bg-[#08080f] border-[#2a2040]'}`}>
+          {/* Top accent line */}
+          <div className={`h-1 w-full ${result === 'kicked' ? 'bg-[linear-gradient(90deg,transparent,#ff6020,transparent)]' : 'bg-[linear-gradient(90deg,transparent,#9060c0,transparent)]'}`} />
+
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-[#2a2040]/60 flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#705090]">
+              {result === 'kicked' ? 'JUDGMENT' : 'Sensory Barrier // 感官屏障'}
+            </span>
+            <span className={`text-[11px] font-mono tracking-widest animate-pulse ${result === 'kicked' ? 'text-orange-500' : 'text-[#c0a0e0]'}`}>
+              {result === 'kicked' ? '>>> ORANGE_SHADOW_ACTIVATED' : '>>> BLACK_CAT_ENCOUNTERED'}
+            </span>
+          </div>
+
+          <div className="p-6 sm:p-10 flex flex-col bg-[#04030a]">
+
+            {/* Cat icon decoration */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-14 h-px bg-[#5030a0]/40" />
+              <div className={`text-[28px] ${result === 'kicked' ? 'animate-[pulse_0.3s_ease-in-out_infinite]' : 'animate-[pulse_2s_ease-in-out_infinite]'}`}>
+                {result === 'kicked' ? '🟠' : '🐱'}
+              </div>
+              <div className="flex-1 h-px bg-[#5030a0]/40" />
+              <span className="text-[12px] uppercase tracking-[4px] text-[#5030a0] font-bold">
+                {result === 'kicked' ? '橘影裁决' : '城门庭院 · 因果律哈基米'}
+              </span>
+              <div className="w-14 h-px bg-[#5030a0]/40" />
+            </div>
+
+            {/* Main text area */}
+            {result && result !== 'none' ? (
+              <motion.div
+                key={result}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                {RESULT_TEXT[result]}
+              </motion.div>
+            ) : (
+              <div className="text-[16px] sm:text-[17px] leading-[2.2] text-[#b0a0c8] font-serif tracking-wide text-justify indent-8">
+                黑猫蹲在断裂的石像颈项上，那对金色的竖瞳正死死地钉在你身上。空气中弥漫着一种难以名状的张力——它正静静地等待你的决定。
+                <br /><br />
+                <span className="text-[#806080] italic text-[14px]">感官屏障已激活。在做出选择之前，你无法离开这片庭院。</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {(!result || result === 'none') && (
+              <div className="mt-8 flex flex-col gap-3">
+                {/* Feed section */}
+                {hasAnyFood ? (
+                  <div className="flex flex-col gap-2 border border-[#5030a0]/30 p-3 bg-[#0a0814]">
+                    <button
+                      onClick={() => setFeedExpanded(e => !e)}
+                      className="w-full py-2 text-[13px] border border-[#7050c0]/50 text-[#c0a0e0] hover:bg-[#7050c0]/20 hover:border-[#9070d0] uppercase tracking-widest font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>[ 尝试喂食 ]</span>
+                      <span className="text-[10px] opacity-60">{feedExpanded ? '▲' : '▼'} 展开食物选项</span>
+                    </button>
+                    <AnimatePresence>
+                      {feedExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="grid grid-cols-3 gap-2 overflow-hidden"
+                        >
+                          {hasCatFood && (
+                            <button
+                              onClick={() => doFeed('cat_food')}
+                              className="py-2 border border-theme-cyan/40 text-theme-cyan/90 hover:bg-theme-cyan/20 hover:border-theme-cyan text-[11px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              🐟 猫粮
+                            </button>
+                          )}
+                          {hasChickenBreast && (
+                            <button
+                              onClick={() => doFeed('chicken_breast')}
+                              className="py-2 border border-green-600/40 text-green-400/90 hover:bg-green-600/20 hover:border-green-400 text-[11px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              🍗 鸡胸肉
+                            </button>
+                          )}
+                          {hasRiceOil && (
+                            <button
+                              onClick={() => doFeed('rice_oil')}
+                              className="py-2 border border-yellow-600/40 text-yellow-400/90 hover:bg-yellow-600/20 hover:border-yellow-400 text-[11px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              🫙 米油
+                            </button>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <div className="py-2 px-3 border border-dashed border-[#3a2a5a] text-[11px] text-[#504060] text-center uppercase tracking-widest italic">
+                    // 背包中没有食物 — 无法喂食 //
+                  </div>
+                )}
+
+                {/* Kick button */}
+                <button
+                  onClick={doKick}
+                  className="w-full py-3 text-[13px] border border-orange-900/50 text-orange-700/80 hover:bg-orange-900/20 hover:border-orange-600 hover:text-orange-500 uppercase tracking-widest font-bold transition-all cursor-pointer"
+                >
+                  [ 粗暴驱逐 ] — 大橘为重
+                </button>
+
+                {/* Leave (only if no food) - can also force go to kitchen hint */}
+                {!hasAnyFood && (
+                  <div className="text-[11px] text-[#403050] italic text-center mt-1">
+                    提示：厨房中或许有可用的补给…… 但目前感官屏障封锁了行动。
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* After feed result: leave button */}
+            {result && result !== 'none' && result !== 'kicked' && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={leaveAfterFeed}
+                  className="px-10 py-3 bg-transparent border border-[#5030a0]/50 text-[#c0a0e0] hover:bg-[#5030a0]/20 hover:text-white transition uppercase tracking-widest font-bold cursor-pointer"
+                >
+                  [ 颤抖 ] 离开庭院
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // --- Global Logic Control ---
 let globalLoopId = 0;
 
@@ -3035,7 +3299,7 @@ export default function App() {
 
       const s = stateRef.current;
       const isPaused = s.showRoomDesc || s.lookoutMode ||
-        ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status);
+        ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory', 'yard_cat'].includes(s.status);
 
       if (isPaused) {
         lastTime = time;
@@ -3087,7 +3351,7 @@ export default function App() {
   const updateGame = (state: GameState, dt: number) => {
     // 双重保护：如果处于暂停状态，直接跳过逻辑更新
     if (state.showRoomDesc || state.lookoutMode || state.status === 'gameover') return;
-    if (['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(state.status)) return;
+    if (['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory', 'yard_cat'].includes(state.status)) return;
 
     // --- Global Timers (Moved to top for safety) ---
     if (state.showWarningTimer > 0) state.showWarningTimer = Math.max(0, state.showWarningTimer - dt);
@@ -3860,7 +4124,7 @@ export default function App() {
           <div className="text-[18px] sm:text-[24px] font-bold tracking-[2px] sm:tracking-[4px] text-theme-cyan uppercase">
             ENCOUNTER
           </div>
-          {(s.showRoomDesc || s.lookoutMode || ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status)) && (
+          {(s.showRoomDesc || s.lookoutMode || ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory', 'yard_cat'].includes(s.status)) && (
             <div className="flex bg-yellow-900/50 border border-yellow-500 text-yellow-500 text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_rgba(234,179,8,0.3)_inset]">
               ⏳ 时间静止 (TIME FROZEN)
             </div>
@@ -3971,6 +4235,7 @@ export default function App() {
         <WarningOverlay stateRef={stateRef} />
         <CombatDialogOverlay stateRef={stateRef} tick={(s.combatData?.timer || 0) * 50} />
         <RoomDescriptionOverlay stateRef={stateRef} forceRender={forceRender} tick={renderTick} />
+        <YardCatOverlay stateRef={stateRef} forceRender={forceRender} renderTick={renderTick} />
 
         {/* Right Column: Logs */}
         <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-y-auto shrink-0 relative custom-scrollbar">
