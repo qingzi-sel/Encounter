@@ -902,7 +902,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 );
               })}
               {/* Green Midnight Laser Rendering */}
-              {s.greenMidnight.active && (() => {
+              {s.greenMidnight.active && s.status !== 'chasing' && (() => {
                 const origin = ROOM_LAYOUT['LivingRoom'];
                 const oX = origin.x * G_SPACING;
                 const oY = origin.y * G_SPACING;
@@ -918,7 +918,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 )
               })()}
               {/* Top-level Intent Arrow Layer */}
-              {s.debugShowIntentions && (
+              {s.debugShowIntentions && s.status !== 'chasing' && (
                 <g>
                   <defs>
                      <marker id="npc-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
@@ -2005,7 +2005,7 @@ export default function App() {
       rd.spawnTimer += dt;
 
       // Difficulty based on book: spawn interval
-      const spawnInterval = rd.bookType === 50 ? 0.3 : 0.6;
+      const spawnInterval = rd.bookType === 50 ? 0.45 : 0.6;
 
       // Spawn corruptions at intervals
       if (rd.spawnTimer >= spawnInterval) {
@@ -2019,7 +2019,7 @@ export default function App() {
 
       // Corruption is dynamically driven by the number of active corrupted words
       const corruptedWordsCount = rd.words.filter(w => w.isCorrupt).length;
-      const rotRate = rd.bookType === 50 ? 3.0 : 2.0;
+      const rotRate = rd.bookType === 50 ? 2.2 : 2.0;
 
       // Suffer corruption growth based on how many words are currently corrupted over time
       rd.corruption += (corruptedWordsCount * rotRate) * dt;
