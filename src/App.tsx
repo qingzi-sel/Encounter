@@ -14,7 +14,7 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
     if (actx.state === 'suspended') actx.resume();
     const osc = actx.createOscillator();
     const gain = actx.createGain();
-    
+
     if (type === 'start') {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(440, actx.currentTime);
@@ -61,14 +61,14 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
       // Magic collision: High chime + impact
       const osc2 = actx.createOscillator();
       const gain2 = actx.createGain();
-      
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(1600, actx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(2400, actx.currentTime + 0.15);
       gain.gain.setValueAtTime(0, actx.currentTime);
       gain.gain.linearRampToValueAtTime(0.4, actx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + 0.2);
-      
+
       osc2.type = 'triangle';
       osc2.frequency.setValueAtTime(400, actx.currentTime);
       osc2.frequency.exponentialRampToValueAtTime(100, actx.currentTime + 0.1);
@@ -78,7 +78,7 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
 
       osc.connect(gain); gain.connect(actx.destination);
       osc2.connect(gain2); gain2.connect(actx.destination);
-      
+
       osc.start(); osc.stop(actx.currentTime + 0.2);
       osc2.start(); osc2.stop(actx.currentTime + 0.15);
     } else if (type === 'read_clear') {
@@ -95,15 +95,15 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
       // Deep heavy failure: Detuned low frequencies with filter sweep
       const osc2 = actx.createOscillator();
       const lpf = actx.createBiquadFilter();
-      
+
       lpf.type = 'lowpass';
       lpf.frequency.setValueAtTime(800, actx.currentTime);
       lpf.frequency.exponentialRampToValueAtTime(100, actx.currentTime + 1.5);
-      
+
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(80, actx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(20, actx.currentTime + 1.5);
-      
+
       osc2.type = 'square';
       osc2.frequency.setValueAtTime(76, actx.currentTime); // heavily detuned
       osc2.frequency.exponentialRampToValueAtTime(18, actx.currentTime + 1.5);
@@ -149,14 +149,14 @@ const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_cli
       osc.connect(gain); gain.connect(actx.destination);
       osc.start(); osc.stop(actx.currentTime + 0.2);
     }
-  } catch(e) {
+  } catch (e) {
     console.error("Audio block", e);
   }
 };
 
 // --- Types & Constants ---
 type AttrType = 'stamina' | 'strength' | 'patience' | 'intelligence' | 'focus';
-type RoomId = 
+type RoomId =
   | 'LivingRoom' | 'GreatHall' | 'ThroneRoom'
   | 'MainGate' | 'Armory' | 'Watchtower' | 'Yard'
   | 'GrandLibrary' | 'AlchemyLab' | 'Observatory'
@@ -189,7 +189,7 @@ const ROOMS: Record<RoomId, RoomDef> = {
   AlchemyLab: { id: 'AlchemyLab', name: '炼金室', attrs: ['intelligence', 'focus'], adj: ['GrandLibrary', 'Observatory', 'GuestQuarters'] },
   ShadowCorridor: { id: 'ShadowCorridor', name: '密道', attrs: ['stamina', 'patience'], adj: ['DressingRoom', 'BellTower', 'Greenhouse'] },
   DressingRoom: { id: 'DressingRoom', name: '更衣室', attrs: [], adj: ['LivingRoom', 'ShadowCorridor', 'Chapel'] }, // 唯一的纯绝对安全区
-  GuestQuarters: { id: 'GuestQuarters', name: '贵宾室', attrs: ['stamina', 'focus'], adj: ['LivingRoom', 'AlchemyLab', 'WineCellar'] }, 
+  GuestQuarters: { id: 'GuestQuarters', name: '贵宾室', attrs: ['stamina', 'focus'], adj: ['LivingRoom', 'AlchemyLab', 'WineCellar'] },
   Greenhouse: { id: 'Greenhouse', name: '温室废园', attrs: ['strength', 'patience'], adj: ['ShadowCorridor', 'Armory'] },
   Chapel: { id: 'Chapel', name: '礼拜堂', attrs: ['patience', 'intelligence', 'focus'], adj: ['DressingRoom', 'Yard', 'Armory'] },
   Yard: { id: 'Yard', name: '城门庭院', attrs: ['stamina', 'strength'], adj: ['LivingRoom', 'MainGate', 'Chapel', 'Kitchen'] },
@@ -266,6 +266,15 @@ interface ChaseData {
   monsterDistance: number;
   targetRooms: number;
   speed: number;
+  isUpPath?: boolean;
+  frontMonsterDistance?: number;
+  frontMonsterActive?: boolean;
+  safeRoomSpawned?: boolean;
+  inSafeRoom?: boolean;
+  skillState?: 'charging' | 'striking';
+  skillTimer?: number;
+  skillTargetRoom?: number;
+  hasUsedSkill?: boolean;
 }
 
 interface GameState {
@@ -328,18 +337,18 @@ function calcHP(attrs: Attributes): number {
 function getEffectivePlayerAttr(state: GameState, attr: AttrType): number {
   let val = state.playerAttrs[attr];
   if (attr === 'focus' && state.beast.state === 'contained' && state.beast.satiety < 30) {
-     val *= 0.5;
+    val *= 0.5;
   }
   return snapVal(val);
 }
 
 function adjustDistributed(draft: Attributes, targetKey: AttrType, targetDelta: number): Attributes {
   const current = {
-     stamina: Math.round(draft.stamina * 10),
-     strength: Math.round(draft.strength * 10),
-     patience: Math.round(draft.patience * 10),
-     intelligence: Math.round(draft.intelligence * 10),
-     focus: Math.round(draft.focus * 10),
+    stamina: Math.round(draft.stamina * 10),
+    strength: Math.round(draft.strength * 10),
+    patience: Math.round(draft.patience * 10),
+    intelligence: Math.round(draft.intelligence * 10),
+    focus: Math.round(draft.focus * 10),
   };
   let deltaInt = Math.round(targetDelta * 10);
 
@@ -359,41 +368,41 @@ function adjustDistributed(draft: Attributes, targetKey: AttrType, targetDelta: 
   let activeOthers = [...others];
 
   while (balanceToDistribute !== 0 && activeOthers.length > 0) {
-     let split = Math.round(balanceToDistribute / activeOthers.length);
-     if (split === 0) {
-        split = balanceToDistribute > 0 ? 1 : -1;
-     }
+    let split = Math.round(balanceToDistribute / activeOthers.length);
+    if (split === 0) {
+      split = balanceToDistribute > 0 ? 1 : -1;
+    }
 
-     let nextActiveOthers: AttrType[] = [];
-     for (const k of activeOthers) {
-        if (balanceToDistribute === 0) break;
-        
-        let applied = split;
-        if (current[k] + applied < 0) {
-           applied = -current[k];
-        }
+    let nextActiveOthers: AttrType[] = [];
+    for (const k of activeOthers) {
+      if (balanceToDistribute === 0) break;
 
-        if ((balanceToDistribute > 0 && applied > balanceToDistribute) || 
-            (balanceToDistribute < 0 && applied < balanceToDistribute)) {
-           applied = balanceToDistribute;
-        }
+      let applied = split;
+      if (current[k] + applied < 0) {
+        applied = -current[k];
+      }
 
-        current[k] += applied;
-        balanceToDistribute -= applied;
+      if ((balanceToDistribute > 0 && applied > balanceToDistribute) ||
+        (balanceToDistribute < 0 && applied < balanceToDistribute)) {
+        applied = balanceToDistribute;
+      }
 
-        if (current[k] > 0) {
-           nextActiveOthers.push(k);
-        }
-     }
-     activeOthers = nextActiveOthers;
+      current[k] += applied;
+      balanceToDistribute -= applied;
+
+      if (current[k] > 0) {
+        nextActiveOthers.push(k);
+      }
+    }
+    activeOthers = nextActiveOthers;
   }
 
   return {
-     stamina: current.stamina / 10,
-     strength: current.strength / 10,
-     patience: current.patience / 10,
-     intelligence: current.intelligence / 10,
-     focus: current.focus / 10,
+    stamina: current.stamina / 10,
+    strength: current.strength / 10,
+    patience: current.patience / 10,
+    intelligence: current.intelligence / 10,
+    focus: current.focus / 10,
   };
 }
 
@@ -463,9 +472,9 @@ const SetupScreen = ({ stateRef, forceRender }: { stateRef: React.MutableRefObje
       <div className="max-w-md w-full bg-theme-card border border-theme-border p-8 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
         <h1 className="text-[24px] font-bold mb-2 text-center text-theme-cyan tracking-[4px] uppercase">ENCOUNTER // 遭遇</h1>
         <p className="text-[#8b949e] text-xs mb-6 text-center tracking-widest">系统检测到你的存在，请分配初始属性点</p>
-        
+
         <div className="flex justify-between items-center bg-black border border-theme-border p-4 mb-6 relative overflow-hidden">
-           {/* Simulating health bar gradient here */}
+          {/* Simulating health bar gradient here */}
           <div className="absolute left-0 top-0 h-full bg-[linear-gradient(90deg,var(--color-theme-red),#ff9999)] opacity-30 transition-all" style={{ width: `${(totHP / 100) * 100}%` }}></div>
           <span className="font-semibold text-theme-text text-sm z-10 relative">总血量 (HP)</span>
           <span className={`text-xl font-bold z-10 relative ${totHP > 100 ? 'text-theme-red' : 'text-theme-green'}`}>{totHP.toFixed(1)} / 100.0</span>
@@ -520,25 +529,25 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
   const handleApplyDraft = () => {
     if (calcHP(draft) <= currentHP) {
       if (stateRef.current.instantReallocActive) {
-         stateRef.current.playerAttrs = snapAll(draft);
-         stateRef.current.pendingPlayerAttrs = null;
-         stateRef.current.reallocTimer = 0;
-         stateRef.current.instantReallocActive = false;
-         addLog(stateRef.current, `⏳ 时光沙漏被消耗：属性瞬间重组完成了！`);
+        stateRef.current.playerAttrs = snapAll(draft);
+        stateRef.current.pendingPlayerAttrs = null;
+        stateRef.current.reallocTimer = 0;
+        stateRef.current.instantReallocActive = false;
+        addLog(stateRef.current, `⏳ 时光沙漏被消耗：属性瞬间重组完成了！`);
       } else {
-         stateRef.current.pendingPlayerAttrs = snapAll(draft);
-         stateRef.current.reallocTimer = 0;
-         addLog(stateRef.current, `⚙️ 开始重组属性，需要 4 秒生效时间...`);
+        stateRef.current.pendingPlayerAttrs = snapAll(draft);
+        stateRef.current.reallocTimer = 0;
+        addLog(stateRef.current, `⚙️ 开始重组属性，需要 4 秒生效时间...`);
       }
       forceRender();
     }
   };
 
   const handleCancelDraft = () => {
-     stateRef.current.pendingPlayerAttrs = null;
-     stateRef.current.reallocTimer = 0;
-     addLog(stateRef.current, `🚫 放弃了属性重组。`);
-     forceRender();
+    stateRef.current.pendingPlayerAttrs = null;
+    stateRef.current.reallocTimer = 0;
+    addLog(stateRef.current, `🚫 放弃了属性重组。`);
+    forceRender();
   };
 
   const draftHP = calcHP(draft);
@@ -560,44 +569,44 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
             <div key={key} className="flex items-center gap-1 sm:gap-2 mb-3">
               <span className="w-[50px] sm:w-[60px] text-[13px] text-theme-text shrink-0">{ATTR_NAMES[key]}</span>
               <div className="w-[40px] flex flex-col justify-center items-start shrink-0 leading-[1.1]">
-                 {isDebuffed ? (
-                   <>
-                     <span className="line-through opacity-50 text-[9px] text-theme-red">{baseVal.toFixed(1)}</span>
-                     <span className="text-[14px] font-bold text-purple-400">{effVal.toFixed(1)}</span>
-                   </>
-                 ) : (
-                   <span className="text-[13px] font-bold text-theme-green">{baseVal.toFixed(1)}</span>
-                 )}
+                {isDebuffed ? (
+                  <>
+                    <span className="line-through opacity-50 text-[9px] text-theme-red">{baseVal.toFixed(1)}</span>
+                    <span className="text-[14px] font-bold text-purple-400">{effVal.toFixed(1)}</span>
+                  </>
+                ) : (
+                  <span className="text-[13px] font-bold text-theme-green">{baseVal.toFixed(1)}</span>
+                )}
               </div>
-              
+
               <div className="flex-1 flex items-center gap-[2px] sm:gap-1 min-w-0">
-              <button 
-                onClick={() => handleAdjust(key, -10)}
-                disabled={isReallocating}
-                className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-7 sm:w-8 h-[30px] shrink-0 flex items-center justify-center transition-all text-[10px] font-bold"
-              >-10</button>
-              <button 
-                onClick={() => handleAdjust(key, -1)}
-                disabled={isReallocating}
-                className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-6 sm:w-7 h-[30px] shrink-0 flex items-center justify-center transition-all font-bold"
-              >-</button>
-              
-              <div className="flex-1 w-0 min-w-[30px] bg-transparent border-b border-theme-border px-1 py-1 text-center text-theme-green disabled:opacity-50 h-[30px] text-[12px] leading-tight flex items-center justify-center font-bold">
-                {draft[key].toFixed(1)}
+                <button
+                  onClick={() => handleAdjust(key, -10)}
+                  disabled={isReallocating}
+                  className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-7 sm:w-8 h-[30px] shrink-0 flex items-center justify-center transition-all text-[10px] font-bold"
+                >-10</button>
+                <button
+                  onClick={() => handleAdjust(key, -1)}
+                  disabled={isReallocating}
+                  className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-6 sm:w-7 h-[30px] shrink-0 flex items-center justify-center transition-all font-bold"
+                >-</button>
+
+                <div className="flex-1 w-0 min-w-[30px] bg-transparent border-b border-theme-border px-1 py-1 text-center text-theme-green disabled:opacity-50 h-[30px] text-[12px] leading-tight flex items-center justify-center font-bold">
+                  {draft[key].toFixed(1)}
+                </div>
+
+                <button
+                  onClick={() => handleAdjust(key, 1)}
+                  disabled={isReallocating}
+                  className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-6 sm:w-7 h-[30px] shrink-0 flex items-center justify-center transition-all font-bold"
+                >+</button>
+                <button
+                  onClick={() => handleAdjust(key, 10)}
+                  disabled={isReallocating}
+                  className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-7 sm:w-8 h-[30px] shrink-0 flex items-center justify-center transition-all text-[10px] font-bold"
+                >+10</button>
               </div>
-              
-              <button 
-                onClick={() => handleAdjust(key, 1)}
-                disabled={isReallocating}
-                className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-6 sm:w-7 h-[30px] shrink-0 flex items-center justify-center transition-all font-bold"
-              >+</button>
-              <button 
-                onClick={() => handleAdjust(key, 10)}
-                disabled={isReallocating}
-                className="bg-transparent border border-theme-cyan text-theme-cyan hover:bg-theme-cyan/10 disabled:opacity-30 disabled:cursor-not-allowed w-7 sm:w-8 h-[30px] shrink-0 flex items-center justify-center transition-all text-[10px] font-bold"
-              >+10</button>
             </div>
-          </div>
           );
         })}
       </div>
@@ -625,90 +634,90 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
             {isReallocating ? `重组中... ${Math.abs(4.0 - s.reallocTimer).toFixed(1)}s (点击取消)` : '就绪'}
           </span>
           {isReallocating && (
-             <button 
-               onClick={handleCancelDraft} 
-               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-               title="点击取消重组"
-             />
+            <button
+              onClick={handleCancelDraft}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+              title="点击取消重组"
+            />
           )}
         </div>
       </div>
 
       {/* Inventory Section */}
       <div className="mt-4 border-t border-theme-border pt-4">
-         <div className="text-[10px] text-theme-cyan/70 uppercase mb-2">以太背包 (Inventory)</div>
-         <div className="flex flex-wrap gap-2">
-            {s.inventory.length === 0 ? (
-               <span className="text-[10px] text-theme-text/30">空无一物...</span>
-            ) : (
-               s.inventory.map((item, idx) => {
-                 return (
-                    <button
-                       key={idx}
-                       onClick={() => {
-                          const itemIndex = s.inventory.indexOf(item);
-                          if (itemIndex > -1) {
-                             s.inventory.splice(itemIndex, 1);
-                             if (item === 'ether_potion') {
-                                s.invisibilityTimer = 5.0;
-                                addLog(s, `✨ 你饮下了【隐世药剂】，获得了虚无状态！`);
-                             } else if (item === 'hourglass') {
-                                s.instantReallocActive = true;
-                                addLog(s, `⏳ 【时光沙漏】已激活！下一次属性重组将瞬间完成！`);
-                             } else if (item === 'straw_doll') {
-                                s.traps.push(s.playerLoc as RoomId);
-                                addLog(s, `🔥 你在 ${ROOMS[s.playerLoc as RoomId].name} 放置了【厄运稻草人】。`);
-                                // Immediate trigger if any NPC is already in the room
-                                const npcInRoom = s.npcs.find(n => !n.isDead && n.loc === s.playerLoc);
-                                if (npcInRoom) {
-                                   s.traps = s.traps.filter(t => t !== s.playerLoc);
-                                   addLog(s, `🔥 刚放置的厄运稻草人立即被 ${npcInRoom.name} 触发，全属性强制削弱！`);
-                                   for (let key in npcInRoom.attrs) {
-                                      npcInRoom.attrs[key as AttrType] = Math.max(0, npcInRoom.attrs[key as AttrType] / 2);
-                                   }
-                                }
-                             }
-                             forceRender();
+        <div className="text-[10px] text-theme-cyan/70 uppercase mb-2">以太背包 (Inventory)</div>
+        <div className="flex flex-wrap gap-2">
+          {s.inventory.length === 0 ? (
+            <span className="text-[10px] text-theme-text/30">空无一物...</span>
+          ) : (
+            s.inventory.map((item, idx) => {
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const itemIndex = s.inventory.indexOf(item);
+                    if (itemIndex > -1) {
+                      s.inventory.splice(itemIndex, 1);
+                      if (item === 'ether_potion') {
+                        s.invisibilityTimer = 5.0;
+                        addLog(s, `✨ 你饮下了【隐世药剂】，获得了虚无状态！`);
+                      } else if (item === 'hourglass') {
+                        s.instantReallocActive = true;
+                        addLog(s, `⏳ 【时光沙漏】已激活！下一次属性重组将瞬间完成！`);
+                      } else if (item === 'straw_doll') {
+                        s.traps.push(s.playerLoc as RoomId);
+                        addLog(s, `🔥 你在 ${ROOMS[s.playerLoc as RoomId].name} 放置了【厄运稻草人】。`);
+                        // Immediate trigger if any NPC is already in the room
+                        const npcInRoom = s.npcs.find(n => !n.isDead && n.loc === s.playerLoc);
+                        if (npcInRoom) {
+                          s.traps = s.traps.filter(t => t !== s.playerLoc);
+                          addLog(s, `🔥 刚放置的厄运稻草人立即被 ${npcInRoom.name} 触发，全属性强制削弱！`);
+                          for (let key in npcInRoom.attrs) {
+                            npcInRoom.attrs[key as AttrType] = Math.max(0, npcInRoom.attrs[key as AttrType] / 2);
                           }
-                       }}
-                       className="border border-yellow-500/50 bg-black text-yellow-500 p-1 px-2 text-[10px] hover:bg-yellow-500/20 uppercase"
-                    >
-                       {item === 'ether_potion' ? '隐世药剂' : item === 'hourglass' ? '时光沙漏' : '厄运稻草人'}
-                    </button>
-                 );
-               })
-            )}
-         </div>
+                        }
+                      }
+                      forceRender();
+                    }
+                  }}
+                  className="border border-yellow-500/50 bg-black text-yellow-500 p-1 px-2 text-[10px] hover:bg-yellow-500/20 uppercase"
+                >
+                  {item === 'ether_potion' ? '隐世药剂' : item === 'hourglass' ? '时光沙漏' : '厄运稻草人'}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
     </React.Fragment>
   );
 };
 
-const ROOM_LAYOUT: Record<RoomId, {x: number, y: number}> = {
-  ThroneRoom:     {x: 0, y: -2},
-  LordsChamber:   {x: -1, y: -2},
-  GrandLibrary:   {x: 1, y: -2},
-  Observatory:    {x: 2, y: -2},
+const ROOM_LAYOUT: Record<RoomId, { x: number, y: number }> = {
+  ThroneRoom: { x: 0, y: -2 },
+  LordsChamber: { x: -1, y: -2 },
+  GrandLibrary: { x: 1, y: -2 },
+  Observatory: { x: 2, y: -2 },
 
-  BellTower:      {x: -2, y: -1},
-  GreatHall:      {x: 0, y: -1},
-  AlchemyLab:     {x: 2, y: -1},
+  BellTower: { x: -2, y: -1 },
+  GreatHall: { x: 0, y: -1 },
+  AlchemyLab: { x: 2, y: -1 },
 
-  ShadowCorridor: {x: -2, y: 0},
-  DressingRoom:   {x: -1, y: 0},
-  LivingRoom:     {x: 0, y: 0},
-  GuestQuarters:  {x: 1, y: 0},
+  ShadowCorridor: { x: -2, y: 0 },
+  DressingRoom: { x: -1, y: 0 },
+  LivingRoom: { x: 0, y: 0 },
+  GuestQuarters: { x: 1, y: 0 },
 
-  Greenhouse:     {x: -2, y: 1},
-  Chapel:         {x: -1, y: 1},
-  Yard:           {x: 0, y: 1},
-  Kitchen:        {x: 1, y: 1},
-  WineCellar:     {x: 2, y: 1},
+  Greenhouse: { x: -2, y: 1 },
+  Chapel: { x: -1, y: 1 },
+  Yard: { x: 0, y: 1 },
+  Kitchen: { x: 1, y: 1 },
+  WineCellar: { x: 2, y: 1 },
 
-  Armory:         {x: -1, y: 2},
-  MainGate:       {x: 0, y: 2},
-  Watchtower:     {x: 1, y: 2},
-  Dungeon:        {x: 2, y: 2},
+  Armory: { x: -1, y: 2 },
+  MainGate: { x: 0, y: 2 },
+  Watchtower: { x: 1, y: 2 },
+  Dungeon: { x: 2, y: 2 },
 };
 
 const MAP_EDGES: [RoomId, RoomId][] = [
@@ -754,313 +763,489 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
   const G_SPACING = 140; // Use this variable to adjust perfect gap width between rooms
 
   const handleWheel = (e: React.WheelEvent) => {
-     e.preventDefault();
-     setZoom(z => {
-        const newZ = z - e.deltaY * 0.001;
-        return Math.max(0.3, Math.min(newZ, 2.5));
-     });
+    e.preventDefault();
+    setZoom(z => {
+      const newZ = z - e.deltaY * 0.001;
+      return Math.max(0.3, Math.min(newZ, 2.5));
+    });
   };
+
+  const getChaseCoord = (idx: number, isExpUp: boolean, isSafe?: boolean) => {
+    if (isSafe) return { x: 9.3, y: -5 };
+    if (idx <= 10) return { x: idx, y: 0 };
+    if (isExpUp) return { x: 10, y: -(idx - 10) };
+    return { x: idx, y: 0 };
+  };
+
+  const chaseNodesToRender: { i: number; isUp: boolean; isSafe?: boolean }[] = [];
+  if (s.status === 'chasing' && s.chaseData) {
+    for (let i = 0; i <= s.chaseData.targetRooms; i++) {
+      if (s.chaseData.isUpPath) {
+        if (i <= 10) chaseNodesToRender.push({ i, isUp: false });
+        else chaseNodesToRender.push({ i, isUp: true });
+        
+        if (s.chaseData.safeRoomSpawned && i === 15) {
+           chaseNodesToRender.push({ i, isUp: true, isSafe: true });
+        }
+      } else {
+        chaseNodesToRender.push({ i, isUp: false });
+        if (s.chaseData.playerRooms >= 10 && i > 10) {
+          chaseNodesToRender.push({ i, isUp: true });
+        }
+      }
+    }
+  }
+
+  let chaseCamCoord = { x: 0, y: 0 };
+  if (s.status === 'chasing' && s.chaseData) {
+    chaseCamCoord = getChaseCoord(s.chaseData.playerRooms, !!s.chaseData.isUpPath, !!s.chaseData.inSafeRoom);
+  }
 
   return (
     <React.Fragment>
       <div className="text-[12px] text-theme-cyan uppercase border-b border-theme-border pb-1 mb-6 flex items-center justify-between shrink-0">
         <span>战术地图终端</span>
         <div className="flex items-center gap-2">
-           <span className="text-[10px] text-theme-cyan/50 font-mono">ZOOM: {(zoom*100).toFixed(0)}%</span>
-           <span className="text-[10px] text-[#8b949e]">区域全息投影</span>
+          <span className="text-[10px] text-theme-cyan/50 font-mono">ZOOM: {(zoom * 100).toFixed(0)}%</span>
+          <span className="text-[10px] text-[#8b949e]">区域全息投影</span>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center w-full relative">
         {s.status === 'combat' && (
-           <div className="absolute inset-0 bg-theme-bg/85 z-30 flex flex-col items-center justify-center backdrop-blur-[2px] shadow-[0_0_80px_var(--color-theme-red)_inset] animate-[pulse_2s_ease-in-out_infinite]">
-             <Swords className="text-theme-red w-16 h-16 mb-4 animate-bounce" />
-             <div className="text-[32px] sm:text-[44px] font-bold text-theme-red tracking-widest uppercase shadow-[0_0_20px_var(--color-theme-red)]">
-               战斗中
-             </div>
-             <div className="text-theme-red/90 text-[12px] sm:text-[14px] mt-2 font-mono tracking-widest">
-               / 系统强行锁定物理位移 /
-             </div>
-           </div>
+          <div className="absolute inset-0 bg-theme-bg/85 z-30 flex flex-col items-center justify-center backdrop-blur-[2px] shadow-[0_0_80px_var(--color-theme-red)_inset] animate-[pulse_2s_ease-in-out_infinite]">
+            <Swords className="text-theme-red w-16 h-16 mb-4 animate-bounce" />
+            <div className="text-[32px] sm:text-[44px] font-bold text-theme-red tracking-widest uppercase shadow-[0_0_20px_var(--color-theme-red)]">
+              战斗中
+            </div>
+            <div className="text-theme-red/90 text-[12px] sm:text-[14px] mt-2 font-mono tracking-widest">
+              / 系统强行锁定物理位移 /
+            </div>
+          </div>
         )}
-        <div 
+        <div
           className="relative w-full h-[360px] overflow-hidden bg-black/40 border border-theme-border/50 shadow-[0_0_20px_rgba(0,242,255,0.05)_inset] rounded-sm flex-shrink-0 cursor-crosshair"
           onWheel={handleWheel}
         >
-           <div 
-             className="absolute w-0 h-0 transition-transform duration-700 ease-out"
-             style={{ 
-                left: '50%', top: '50%',
-                transform: s.status === 'chasing' && s.chaseData
-                    ? `scale(${zoom}) translate(${-s.chaseData.playerRooms * G_SPACING}px, 0px)`
-                    : `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
-             }}
-           >
-             {/* Connections */}
-             <svg className="absolute inset-0 overflow-visible pointer-events-none">
-               {s.status === 'chasing' && s.chaseData ? (
-                 Array.from({ length: s.chaseData.targetRooms }).map((_, i) => {
-                    const isActiveLine = i === s.chaseData!.playerRooms || i === s.chaseData!.playerRooms - 1;
-                    return (
-                       <line 
-                          key={`chase-${i}`}
-                          x1={i * G_SPACING} y1={0} 
-                          x2={(i + 1) * G_SPACING} y2={0} 
-                          stroke={isActiveLine ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
-                          strokeWidth={isActiveLine ? 2 : 1}
-                          strokeDasharray={isActiveLine ? "none" : "none"}
-                          opacity={isActiveLine ? 0.6 : 0.2}
-                       />
-                    );
-                 })
-               ) : MAP_EDGES.map(([u, v]) => {
-                  const isActiveLine = u === s.playerLoc || v === s.playerLoc;
-                  if (!isActiveLine && !s.debugShowPaths) return null;
+          <div
+            className="absolute w-0 h-0 transition-transform duration-700 ease-out"
+            style={{
+              left: '50%', top: '50%',
+              transform: s.status === 'chasing' && s.chaseData
+                ? `scale(${zoom}) translate(${-chaseCamCoord.x * G_SPACING}px, ${-chaseCamCoord.y * G_SPACING}px)`
+                : `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
+            }}
+          >
+            {/* Connections */}
+            <svg className="absolute inset-0 overflow-visible pointer-events-none">
+              {s.status === 'chasing' && s.chaseData ? (
+                chaseNodesToRender.filter(n => n.i > 0 && !n.isSafe).map((node) => {
+                  const prevI = node.i - 1;
+                  const prevIsUp = (node.i === 11 && node.isUp) ? false : node.isUp;
+
+                  const pCoord = getChaseCoord(prevI, prevIsUp);
+                  const cCoord = getChaseCoord(node.i, node.isUp);
+
+                  const isActiveLine =
+                    (!s.chaseData!.inSafeRoom && s.chaseData!.playerRooms === prevI) ||
+                    (!s.chaseData!.inSafeRoom && s.chaseData!.playerRooms === node.i && (s.chaseData!.isUpPath || false) === node.isUp);
+
                   return (
-                     <line 
-                        key={`${u}-${v}`}
-                        x1={ROOM_LAYOUT[u].x * G_SPACING} y1={ROOM_LAYOUT[u].y * G_SPACING} 
-                        x2={ROOM_LAYOUT[v].x * G_SPACING} y2={ROOM_LAYOUT[v].y * G_SPACING} 
-                        stroke={isActiveLine ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
-                        strokeWidth={isActiveLine ? 2 : 1}
-                        strokeDasharray={isActiveLine ? "none" : (s.debugShowPaths ? "none" : "4 4")}
-                        opacity={isActiveLine ? 0.6 : (s.debugShowPaths ? 0.5 : 0.2)}
-                     />
+                    <line
+                      key={`chase-line-${node.i}-${node.isUp}`}
+                      x1={pCoord.x * G_SPACING} y1={pCoord.y * G_SPACING}
+                      x2={cCoord.x * G_SPACING} y2={cCoord.y * G_SPACING}
+                      stroke={isActiveLine ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
+                      strokeWidth={isActiveLine ? 2 : 1}
+                      strokeDasharray={isActiveLine ? "none" : "none"}
+                      opacity={isActiveLine ? 0.6 : 0.2}
+                    />
                   );
-               })}
-             {/* Green Midnight Laser Rendering */}
-             {s.greenMidnight.active && (() => {
-                 const origin = ROOM_LAYOUT['LivingRoom'];
-                 const oX = origin.x * G_SPACING;
-                 const oY = origin.y * G_SPACING;
-                 const length = 2000; // extend far out
-                 const thicc = s.greenMidnight.hitCooldown > 0 ? 12 : 5;
-                 return (
-                     <g transform={`rotate(${s.greenMidnight.angle}, ${oX}, ${oY})`} className={s.greenMidnight.hitCooldown > 0 ? 'animate-pulse' : ''}>
-                         <line x1={oX - length} y1={oY} x2={oX + length} y2={oY} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)"/>
-                         <line x1={oX} y1={oY - length} x2={oX} y2={oY + length} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)"/>
-                         <circle cx={oX} cy={oY} r={16} fill="#000" stroke="#22c55e" strokeWidth={3} />
-                         <circle cx={oX} cy={oY} r={6} fill="#22c55e" className="animate-ping" />
-                     </g>
-                 )
-             })()}
-             </svg>
+                }).concat(
+                  s.chaseData.safeRoomSpawned ? [
+                    <line
+                      key="chase-safe-line"
+                      x1={getChaseCoord(15, true).x * G_SPACING} y1={getChaseCoord(15, true).y * G_SPACING}
+                      x2={getChaseCoord(15, true, true).x * G_SPACING} y2={getChaseCoord(15, true, true).y * G_SPACING}
+                      stroke={s.chaseData!.inSafeRoom ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
+                      strokeWidth={s.chaseData!.inSafeRoom ? 2 : 1}
+                      strokeDasharray="none"
+                      opacity={s.chaseData!.inSafeRoom ? 0.6 : 0.1}
+                    />
+                  ] : []
+                )
+              ) : MAP_EDGES.map(([u, v]) => {
+                const isActiveLine = u === s.playerLoc || v === s.playerLoc;
+                if (!isActiveLine && !s.debugShowPaths) return null;
+                return (
+                  <line
+                    key={`${u}-${v}`}
+                    x1={ROOM_LAYOUT[u].x * G_SPACING} y1={ROOM_LAYOUT[u].y * G_SPACING}
+                    x2={ROOM_LAYOUT[v].x * G_SPACING} y2={ROOM_LAYOUT[v].y * G_SPACING}
+                    stroke={isActiveLine ? "var(--color-theme-cyan)" : "var(--color-theme-border)"}
+                    strokeWidth={isActiveLine ? 2 : 1}
+                    strokeDasharray={isActiveLine ? "none" : (s.debugShowPaths ? "none" : "4 4")}
+                    opacity={isActiveLine ? 0.6 : (s.debugShowPaths ? 0.5 : 0.2)}
+                  />
+                );
+              })}
+              {/* Green Midnight Laser Rendering */}
+              {s.greenMidnight.active && (() => {
+                const origin = ROOM_LAYOUT['LivingRoom'];
+                const oX = origin.x * G_SPACING;
+                const oY = origin.y * G_SPACING;
+                const length = 2000; // extend far out
+                const thicc = s.greenMidnight.hitCooldown > 0 ? 12 : 5;
+                return (
+                  <g transform={`rotate(${s.greenMidnight.angle}, ${oX}, ${oY})`} className={s.greenMidnight.hitCooldown > 0 ? 'animate-pulse' : ''}>
+                    <line x1={oX - length} y1={oY} x2={oX + length} y2={oY} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)" />
+                    <line x1={oX} y1={oY - length} x2={oX} y2={oY + length} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)" />
+                    <circle cx={oX} cy={oY} r={16} fill="#000" stroke="#22c55e" strokeWidth={3} />
+                    <circle cx={oX} cy={oY} r={6} fill="#22c55e" className="animate-ping" />
+                  </g>
+                )
+              })()}
+            </svg>
 
-             {/* Rooms */}
-             {s.status === 'chasing' && s.chaseData ? (
-                 Array.from({ length: s.chaseData.targetRooms + 1 }).map((_, i) => {
-                    const isCurrent = s.chaseData!.playerRooms === i;
-                    const isAdj = s.chaseData!.playerRooms + 1 === i;
-                    
-                    let boxCls = "border-theme-border/30 text-[#8b949e]";
-                    if (isCurrent) {
-                       boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
-                    } else if (isAdj) {
-                       boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
-                    }
-                    
-                    return (
-                      <button
-                         key={`chase-room-${i}`}
-                         onClick={() => { 
-                            if (isAdj) {
-                               s.chaseData!.playerRooms++;
-                               playSound('move');
-                            }
-                         }}
-                         disabled={!isAdj && !isCurrent}
-                         className={`absolute flex flex-col items-center justify-center transition-all bg-[var(--color-theme-bg)] ${boxCls}`}
-                         style={{
-                            left: `${i * G_SPACING}px`, top: `0px`,
-                            transform: 'translate(-50%, -50%)',
-                            width: '84px', height: '56px',
-                            borderWidth: '1px'
-                         }}
-                      >
-                         <span className="text-[12px] font-bold tracking-widest leading-tight">{i === s.chaseData!.targetRooms ? '出口' : '未知走廊'}</span>
-                         <span className="text-[9px] text-[#8b949e]/50 mt-[2px] leading-tight">? ? ?</span>
-                         {isCurrent && <div className="mt-[4px] w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" />}
-                      </button>
-                    );
-                 })
-             ) : (Object.values(ROOMS) as RoomDef[]).map((r) => {
-                const layout = ROOM_LAYOUT[r.id];
-                const isCurrent = s.playerLoc === r.id;
-                const isAdj = ROOMS[s.playerLoc].adj.includes(r.id);
-                const npcsInR = s.npcs.filter(n => !n.isDead && n.loc === r.id);
-                const isBeast = s.beast.state === 'escaped' && s.beast.loc === r.id;
-
-                let boxCls = "border-theme-border/30 text-[#8b949e]";
-                if (isCurrent) {
-                   boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
-                } else if (isAdj) {
-                   boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
+            {/* Rooms */}
+            {s.status === 'chasing' && s.chaseData ? (
+              chaseNodesToRender.map((node) => {
+                const i = node.i;
+                
+                let isCurrent = false;
+                if (s.chaseData!.inSafeRoom) {
+                    if (node.isSafe) isCurrent = true;
+                } else {
+                    if (s.chaseData!.playerRooms === i && (s.chaseData!.isUpPath || false) === node.isUp && !node.isSafe) isCurrent = true;
                 }
 
+                let isAdj = false;
+                if (s.chaseData!.inSafeRoom) {
+                    if (i === 15 && !node.isSafe && node.isUp) isAdj = true;
+                } else if (s.chaseData!.playerRooms === 15 && node.isSafe && s.chaseData!.isUpPath) {
+                    isAdj = true;
+                } else if (!node.isSafe) {
+                    // Forward
+                    if (s.chaseData!.playerRooms + 1 === i && (s.chaseData!.playerRooms === 10 ? true : (s.chaseData!.isUpPath || false) === node.isUp)) isAdj = true;
+                    // Backward
+                    if (s.chaseData!.playerRooms - 1 === i) {
+                        if (i <= 10) isAdj = true; // can retreat freely in the initial 0-10 corridor
+                        else if ((s.chaseData!.isUpPath || false) === node.isUp) isAdj = true; // otherwise must match path (Up vs Normal)
+                    }
+                }
+
+                const isHellDeath = !s.chaseData!.isUpPath && i === 11 && !node.isUp && s.chaseData!.playerRooms >= 10;
+
+                let boxCls = "border-theme-border/30 text-[#8b949e]";
+                if (node.isSafe) {
+                    boxCls = "border-theme-border/20 text-[#8b949e]/30 bg-transparent opacity-40 hover:opacity-100 hover:border-theme-cyan/50";
+                    if (isCurrent) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.05)] text-theme-cyan/50 z-20";
+                    else if (isAdj) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.02)] text-theme-cyan/60 hover:opacity-100 z-10 cursor-pointer";
+                } else {
+                    if (isCurrent) {
+                      boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
+                    } else if (isHellDeath) {
+                      boxCls = "border-theme-red bg-theme-red/10 animate-[pulse_1s_ease-in-out_infinite] text-theme-red cursor-pointer z-10 shadow-[0_0_15px_rgba(255,0,0,0.4)]";
+                    } else if (isAdj) {
+                      boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
+                    }
+                }
+
+                const coord = getChaseCoord(i, node.isUp, node.isSafe);
+                const roomName = node.isSafe ? '狭缝隐室' : (isHellDeath ? '地狱' : (i === s.chaseData!.targetRooms ? '出口' : (node.isUp ? '神秘阶梯' : '未知走廊')));
+
                 return (
-                   <button
-                      key={r.id}
-                      onClick={() => { if(isAdj) handlePlayerMove(r.id) }}
-                      disabled={!isAdj && !isCurrent}
-                      className={`absolute flex flex-col items-center justify-center transition-all bg-[var(--color-theme-bg)] ${boxCls}`}
-                      style={{
-                         left: `${layout.x * G_SPACING}px`, top: `${layout.y * G_SPACING}px`,
-                         transform: 'translate(-50%, -50%)',
-                         width: '84px', height: '56px',
-                         borderWidth: '1px'
-                      }}
-                   >
-                      <span className="text-[12px] font-bold tracking-widest leading-tight">{r.name}</span>
-                      {r.attrs.length > 0 ? (
-                         <span className={`text-[9px] mt-[2px] leading-tight ${isCurrent ? 'text-theme-cyan/80' : 'text-[#8b949e]/80'}`}>
-                           {r.attrs.map(a => ATTR_NAMES[a]).join(' ')}
-                         </span>
-                      ) : (
-                         <span className="text-[9px] text-[#8b949e]/50 mt-[2px] leading-tight">安全区</span>
-                      )}
-                      <div className="flex gap-[6px] mt-[4px] h-[6px] items-center">
-                         {isCurrent && <div className="w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" title="Player" />}
-                         {npcsInR.map(n => (
-                             <div key={n.id} style={{ 
-                               borderLeft: '4px solid transparent',
-                               borderRight: '4px solid transparent',
-                               borderBottom: `8px solid ${n.color}`,
-                               filter: `drop-shadow(0 0 5px ${n.color})`
-                             }} className="animate-pulse" title={n.name} />
-                         ))}
-                         {isBeast && <div className="w-[6px] h-[6px] bg-purple-500 rounded-full shadow-[0_0_8px_purple] animate-ping" title="Beast" />}
-                         {s.traps.includes(r.id as RoomId) && <div className="w-[6px] h-[6px] bg-yellow-500 rounded-sm shadow-[0_0_8px_yellow]" title="Trap" />}
-                      </div>
-                   </button>
-                );
-             })}
-             {s.status === 'chasing' && s.chaseData && (
-                <div
-                   className="absolute flex items-center justify-center"
-                   style={{
-                      left: `${s.chaseData.monsterDistance * G_SPACING}px`, top: `0px`,
+                  <button
+                    key={`chase-room-${i}-${node.isUp}-${node.isSafe}`}
+                    onClick={() => {
+                      if (isHellDeath) {
+                        s.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+                        s.status = 'gameover';
+                        addLog(s, `🔴 你踏入了标有“地狱”的房间，灵魂被瞬间剥夺。`);
+                      } else if (isAdj) {
+                        if (node.isSafe) {
+                            s.chaseData!.inSafeRoom = true;
+                            addLog(s, `🌫️ 你挤入了一道极难被察觉的狭缝空间中，屏住了呼吸...`);
+                        } else if (s.chaseData!.inSafeRoom) {
+                            s.chaseData!.inSafeRoom = false;
+                            addLog(s, `👣 你悄无声息地离开裂痕，重新踏上前路。`);
+                        } else {
+                            const isBackward = i < s.chaseData!.playerRooms;
+                            s.chaseData!.playerRooms = i;
+                            if (i === 11 && node.isUp) {
+                              s.chaseData!.isUpPath = true;
+                              addLog(s, `⬆️ 你踏上了向上蜿蜒的新路...`);
+                            } else if (isBackward) {
+                              addLog(s, `⬇️ 仓皇中，退回下方的阶梯...`);
+                            }
+                        }
+                        playSound('move');
+                      }
+                    }}
+                    disabled={!isAdj && !isCurrent && !isHellDeath}
+                    className={`absolute flex flex-col items-center justify-center transition-all bg-[var(--color-theme-bg)] ${boxCls}`}
+                    style={{
+                      left: `${coord.x * G_SPACING}px`, top: `${coord.y * G_SPACING}px`,
                       transform: 'translate(-50%, -50%)',
-                      width: '40px', height: '40px',
-                      pointerEvents: 'none'
-                   }}
+                      width: '84px', height: '56px',
+                      borderWidth: '1px'
+                    }}
+                  >
+                    <span className={`text-[12px] font-bold tracking-widest leading-tight ${isHellDeath ? 'text-theme-red text-[14px]' : ''}`}>{roomName}</span>
+                    <span className={`text-[9px] mt-[2px] leading-tight ${isHellDeath ? 'text-theme-red/80 font-bold' : 'text-[#8b949e]/50'}`}>{isHellDeath ? 'DO NOT ENTER' : '? ? ?'}</span>
+                    {isCurrent && <div className="mt-[4px] w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" />}
+                  </button>
+                );
+              })
+            ) : (Object.values(ROOMS) as RoomDef[]).map((r) => {
+              const layout = ROOM_LAYOUT[r.id];
+              const isCurrent = s.playerLoc === r.id;
+              const isAdj = ROOMS[s.playerLoc].adj.includes(r.id);
+              const npcsInR = s.npcs.filter(n => !n.isDead && n.loc === r.id);
+              const isBeast = s.beast.state === 'escaped' && s.beast.loc === r.id;
+
+              let boxCls = "border-theme-border/30 text-[#8b949e]";
+              if (isCurrent) {
+                boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
+              } else if (isAdj) {
+                boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
+              }
+
+              return (
+                <button
+                  key={r.id}
+                  onClick={() => { if (isAdj) handlePlayerMove(r.id) }}
+                  disabled={!isAdj && !isCurrent}
+                  className={`absolute flex flex-col items-center justify-center transition-all bg-[var(--color-theme-bg)] ${boxCls}`}
+                  style={{
+                    left: `${layout.x * G_SPACING}px`, top: `${layout.y * G_SPACING}px`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '84px', height: '56px',
+                    borderWidth: '1px'
+                  }}
                 >
-                   <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping shadow-[0_0_80px_red]" />
-                   <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">追截虚无</span>
-                </div>
-             )}
-           </div>
+                  <span className="text-[12px] font-bold tracking-widest leading-tight">{r.name}</span>
+                  {r.attrs.length > 0 ? (
+                    <span className={`text-[9px] mt-[2px] leading-tight ${isCurrent ? 'text-theme-cyan/80' : 'text-[#8b949e]/80'}`}>
+                      {r.attrs.map(a => ATTR_NAMES[a]).join(' ')}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-[#8b949e]/50 mt-[2px] leading-tight">安全区</span>
+                  )}
+                  <div className="flex gap-[6px] mt-[4px] h-[6px] items-center">
+                    {isCurrent && <div className="w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" title="Player" />}
+                    {npcsInR.map(n => (
+                      <div key={n.id} style={{
+                        borderLeft: '4px solid transparent',
+                        borderRight: '4px solid transparent',
+                        borderBottom: `8px solid ${n.color}`,
+                        filter: `drop-shadow(0 0 5px ${n.color})`
+                      }} className="animate-pulse" title={n.name} />
+                    ))}
+                    {isBeast && <div className="w-[6px] h-[6px] bg-purple-500 rounded-full shadow-[0_0_8px_purple] animate-ping" title="Beast" />}
+                    {s.traps.includes(r.id as RoomId) && <div className="w-[6px] h-[6px] bg-yellow-500 rounded-sm shadow-[0_0_8px_yellow]" title="Trap" />}
+                  </div>
+                </button>
+              );
+            })}
+            {s.status === 'chasing' && s.chaseData && (() => {
+              const renderMonster = (mDist: number, label: string, isBackMonster?: boolean) => {
+                  const mIndex = Math.floor(mDist);
+                  const mFract = mDist - mIndex;
+                  const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
+                  const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
+                  const mX = c1.x + (c2.x - c1.x) * mFract;
+                  const mY = c1.y + (c2.y - c1.y) * mFract;
+
+                  const isCharging = isBackMonster && s.chaseData!.skillState === 'charging';
+
+                  return (
+                    <div
+                      key={`monster-${label}`}
+                      className="absolute flex items-center justify-center pointer-events-none"
+                      style={{
+                        left: `${mX * G_SPACING}px`, top: `${mY * G_SPACING}px`,
+                        transform: 'translate(-50%, -50%)',
+                        width: '40px', height: '40px',
+                        zIndex: 30
+                      }}
+                    >
+                      <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping shadow-[0_0_80px_red]" />
+                      <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">{label}</span>
+                      {isCharging && (
+                         <span className="absolute -top-[35px] -right-[15px] text-red-500 font-bold text-[24px] animate-bounce" style={{textShadow: '0 0 10px red'}}>!</span>
+                      )}
+                    </div>
+                  );
+              };
+
+              // Strike Render
+              const renderTentacleStrike = () => {
+                 if (s.chaseData!.skillState !== 'striking' || s.chaseData!.skillTargetRoom === undefined) return null;
+                 
+                 const mDist = s.chaseData!.monsterDistance;
+                 const mIndex = Math.floor(mDist);
+                 const mFract = mDist - mIndex;
+                 const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
+                 const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
+                 const mX = c1.x + (c2.x - c1.x) * mFract;
+                 const mY = c1.y + (c2.y - c1.y) * mFract;
+                 
+                 // Target centers
+                 const t1 = getChaseCoord(s.chaseData!.skillTargetRoom, s.chaseData!.isUpPath && s.chaseData!.skillTargetRoom >= 11);
+                 const t2 = getChaseCoord(s.chaseData!.skillTargetRoom! + 1, s.chaseData!.isUpPath && (s.chaseData!.skillTargetRoom! + 1) >= 11);
+
+                 // Render SVG lines from top/bottom holes
+                 return (
+                    <svg className="absolute inset-0 overflow-visible pointer-events-none z-40">
+                       <circle cx={mX * G_SPACING} cy={mY * G_SPACING - 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
+                       <circle cx={mX * G_SPACING} cy={mY * G_SPACING + 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
+                       
+                       <path 
+                          d={`M ${mX * G_SPACING} ${mY * G_SPACING - 30} L ${t2.x * G_SPACING} ${t2.y * G_SPACING}`} 
+                          stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
+                          className="animate-[pulse_0.1s_infinite]"
+                       />
+                       <path 
+                          d={`M ${mX * G_SPACING} ${mY * G_SPACING + 30} L ${t1.x * G_SPACING} ${t1.y * G_SPACING}`} 
+                          stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
+                          className="animate-[pulse_0.1s_infinite]"
+                       />
+
+                       <rect 
+                          x={t1.x * G_SPACING - 42} y={t1.y * G_SPACING - 28} 
+                          width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
+                       />
+                       <rect 
+                          x={t2.x * G_SPACING - 42} y={t2.y * G_SPACING - 28} 
+                          width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
+                       />
+                    </svg>
+                 );
+              };
+
+              return (
+                 <>
+                    {renderMonster(s.chaseData!.monsterDistance, '追截虚无', true)}
+                    {s.chaseData!.frontMonsterActive && s.chaseData!.frontMonsterDistance !== undefined &&
+                       renderMonster(s.chaseData!.frontMonsterDistance, '降临虚无')}
+                    {renderTentacleStrike()}
+                 </>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Current Room Info */}
         <div className="w-full max-w-[360px] flex flex-col gap-2 mt-[15px] shrink-0">
           {s.status === 'chasing' ? (
-             <div className="bg-red-900/10 border border-red-500/50 p-3 text-center animate-pulse">
-               <div className="flex items-center justify-center gap-2 mb-[4px]">
-                  <div className="w-2 h-2 bg-red-500 shadow-[0_0_5px_red]" />
-                  <div className="text-[16px] text-red-500 font-bold uppercase">正在逃亡</div>
-               </div>
-               <div className="text-[12px] opacity-80 text-red-400 font-mono">
-                 距离出口：{s.chaseData ? s.chaseData.targetRooms - s.chaseData.playerRooms : 0} 扇门
-               </div>
-             </div>
+            <div className="bg-red-900/10 border border-red-500/50 p-3 text-center animate-pulse">
+              <div className="flex items-center justify-center gap-2 mb-[4px]">
+                <div className="w-2 h-2 bg-red-500 shadow-[0_0_5px_red]" />
+                <div className="text-[16px] text-red-500 font-bold uppercase">正在逃亡</div>
+              </div>
+              <div className="text-[12px] opacity-80 text-red-400 font-mono">
+                距离出口：{s.chaseData ? s.chaseData.targetRooms - s.chaseData.playerRooms : 0} 扇门
+              </div>
+            </div>
           ) : (
-          <div className="bg-theme-cyan/5 border border-theme-border p-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-[4px]">
-               <div className="w-2 h-2 bg-theme-cyan shadow-[0_0_5px_var(--color-theme-cyan)]" />
-               <div className="text-[16px] text-theme-text font-bold uppercase">{room.name}</div>
+            <div className="bg-theme-cyan/5 border border-theme-border p-3 text-center">
+              <div className="flex items-center justify-center gap-2 mb-[4px]">
+                <div className="w-2 h-2 bg-theme-cyan shadow-[0_0_5px_var(--color-theme-cyan)]" />
+                <div className="text-[16px] text-theme-text font-bold uppercase">{room.name}</div>
+              </div>
+              <div className="text-[12px] opacity-80 text-theme-cyan font-mono">
+                {room.attrs.length > 0 ? `当前环境辐射 | ${room.attrs.map(a => ATTR_NAMES[a]).join(' · ')}` : '绝对安全区域 | 属性无变动'}
+              </div>
             </div>
-            <div className="text-[12px] opacity-80 text-theme-cyan font-mono">
-              {room.attrs.length > 0 ? `当前环境辐射 | ${room.attrs.map(a => ATTR_NAMES[a]).join(' · ')}` : '绝对安全区域 | 属性无变动'}
-            </div>
-          </div>
           )}
-          
+
           {room.id === 'Dungeon' && s.beast.state === 'contained' && (
             <div className="bg-[#1a0000] border border-theme-red p-3 flex flex-col justify-center">
-               <div className="flex justify-between items-center text-[10px] text-theme-red/80 mb-2 font-bold uppercase tracking-widest">
-                  <span>⚠️ 收容实体饱食度</span>
-                  <span>{Math.floor(s.beast.satiety)}%</span>
-               </div>
-               <div className="w-full bg-black h-1.5 mb-3 border border-theme-red/30 flex overflow-hidden">
-                   <div className="bg-theme-red h-full" style={{width: `${Math.max(0, s.beast.satiety)}%`}}></div>
-               </div>
-               <button 
-                   onPointerDown={() => { s.isFeedingBeast = true; }}
-                   onPointerUp={() => { s.isFeedingBeast = false; }}
-                   onPointerLeave={() => { s.isFeedingBeast = false; }}
-                   onPointerCancel={() => { s.isFeedingBeast = false; }}
-                   className="w-full bg-transparent border border-theme-red text-theme-red hover:bg-theme-red/20 h-[36px] text-[12px] uppercase font-bold active:bg-theme-red active:text-white transition-colors cursor-pointer select-none"
-               >
-                   [长按] 强制输送生体精华
-               </button>
+              <div className="flex justify-between items-center text-[10px] text-theme-red/80 mb-2 font-bold uppercase tracking-widest">
+                <span>⚠️ 收容实体饱食度</span>
+                <span>{Math.floor(s.beast.satiety)}%</span>
+              </div>
+              <div className="w-full bg-black h-1.5 mb-3 border border-theme-red/30 flex overflow-hidden">
+                <div className="bg-theme-red h-full" style={{ width: `${Math.max(0, s.beast.satiety)}%` }}></div>
+              </div>
+              <button
+                onPointerDown={() => { s.isFeedingBeast = true; }}
+                onPointerUp={() => { s.isFeedingBeast = false; }}
+                onPointerLeave={() => { s.isFeedingBeast = false; }}
+                onPointerCancel={() => { s.isFeedingBeast = false; }}
+                className="w-full bg-transparent border border-theme-red text-theme-red hover:bg-theme-red/20 h-[36px] text-[12px] uppercase font-bold active:bg-theme-red active:text-white transition-colors cursor-pointer select-none"
+              >
+                [长按] 强制输送生体精华
+              </button>
             </div>
           )}
 
           {room.id === 'GrandLibrary' && (
             <div className="flex flex-col gap-2 p-3 bg-theme-cyan/5 border border-theme-border">
-               <div className="text-[10px] text-theme-cyan/80 uppercase font-bold text-center border-b border-theme-border/30 pb-1 mb-1">禁忌书架</div>
-               
-               {s.completedBooks.includes(20) ? (
-                 <button disabled className="w-full h-[36px] text-[12px] border border-theme-cyan/20 text-theme-cyan/30 uppercase cursor-not-allowed">
-                   [ 已掌握 ] 《活体演化》
-                 </button>
-               ) : (
-                 <button 
-                   disabled={s.playerAttrs.intelligence < 20}
-                   onClick={() => startReading(20)}
-                   className={`w-full h-[36px] text-[12px] border border-theme-cyan uppercase transition-colors ${s.playerAttrs.intelligence >= 20 ? 'text-theme-cyan hover:bg-theme-cyan/10 cursor-pointer' : 'text-theme-cyan/30 border-theme-cyan/20 cursor-not-allowed'}`}
-                 >
-                   {s.playerAttrs.intelligence >= 20 ? '[ 研读 ] 《活体演化》' : `需要智力 20.0 (${s.playerAttrs.intelligence.toFixed(1)})`}
-                 </button>
-               )}
+              <div className="text-[10px] text-theme-cyan/80 uppercase font-bold text-center border-b border-theme-border/30 pb-1 mb-1">禁忌书架</div>
 
-               {s.completedBooks.includes(50) ? (
-                 <button disabled className="w-full h-[36px] text-[12px] border border-theme-cyan/20 text-theme-cyan/30 uppercase cursor-not-allowed">
-                   [ 已掌握 ] 《拉莱耶残卷》
-                 </button>
-               ) : (
-                 <button 
-                   disabled={s.playerAttrs.intelligence < 50}
-                   onClick={() => startReading(50)}
-                   className={`w-full h-[36px] text-[12px] border border-theme-cyan uppercase transition-colors ${s.playerAttrs.intelligence >= 50 ? 'text-theme-cyan hover:bg-theme-cyan/10 cursor-pointer' : 'text-theme-cyan/30 border-theme-cyan/20 cursor-not-allowed'}`}
-                 >
-                   {s.playerAttrs.intelligence >= 50 ? '[ 研读 ] 《拉莱耶残卷》' : `需要智力 50.0 (${s.playerAttrs.intelligence.toFixed(1)})`}
-                 </button>
-               )}
+              {s.completedBooks.includes(20) ? (
+                <button disabled className="w-full h-[36px] text-[12px] border border-theme-cyan/20 text-theme-cyan/30 uppercase cursor-not-allowed">
+                  [ 已掌握 ] 《活体演化》
+                </button>
+              ) : (
+                <button
+                  disabled={s.playerAttrs.intelligence < 20}
+                  onClick={() => startReading(20)}
+                  className={`w-full h-[36px] text-[12px] border border-theme-cyan uppercase transition-colors ${s.playerAttrs.intelligence >= 20 ? 'text-theme-cyan hover:bg-theme-cyan/10 cursor-pointer' : 'text-theme-cyan/30 border-theme-cyan/20 cursor-not-allowed'}`}
+                >
+                  {s.playerAttrs.intelligence >= 20 ? '[ 研读 ] 《活体演化》' : `需要智力 20.0 (${s.playerAttrs.intelligence.toFixed(1)})`}
+                </button>
+              )}
+
+              {s.completedBooks.includes(50) ? (
+                <button disabled className="w-full h-[36px] text-[12px] border border-theme-cyan/20 text-theme-cyan/30 uppercase cursor-not-allowed">
+                  [ 已掌握 ] 《拉莱耶残卷》
+                </button>
+              ) : (
+                <button
+                  disabled={s.playerAttrs.intelligence < 50}
+                  onClick={() => startReading(50)}
+                  className={`w-full h-[36px] text-[12px] border border-theme-cyan uppercase transition-colors ${s.playerAttrs.intelligence >= 50 ? 'text-theme-cyan hover:bg-theme-cyan/10 cursor-pointer' : 'text-theme-cyan/30 border-theme-cyan/20 cursor-not-allowed'}`}
+                >
+                  {s.playerAttrs.intelligence >= 50 ? '[ 研读 ] 《拉莱耶残卷》' : `需要智力 50.0 (${s.playerAttrs.intelligence.toFixed(1)})`}
+                </button>
+              )}
             </div>
           )}
 
           {room.id === 'Observatory' && (
             <div className="flex flex-col gap-2 p-3 bg-[#111] border border-[#555]">
-               <div className="text-[10px] text-yellow-500/80 uppercase font-bold text-center border-b border-[#555]/50 pb-1 mb-1">星象仪占卜</div>
-               <button 
-                 disabled={s.divinationCooldown > 0}
-                 onClick={startDivination}
-                 className={`w-full h-[36px] text-[12px] border border-yellow-500 uppercase transition-colors ${s.divinationCooldown <= 0 ? 'text-yellow-500 hover:bg-yellow-500/10 cursor-pointer' : 'text-yellow-500/30 border-yellow-500/20 cursor-not-allowed'}`}
-               >
-                 {s.divinationCooldown > 0 ? `星象紊乱 [ ${Math.ceil(s.divinationCooldown)}s ]` : '[ 凝注群星 ] 进行占卜'}
-               </button>
+              <div className="text-[10px] text-yellow-500/80 uppercase font-bold text-center border-b border-[#555]/50 pb-1 mb-1">星象仪占卜</div>
+              <button
+                disabled={s.divinationCooldown > 0}
+                onClick={startDivination}
+                className={`w-full h-[36px] text-[12px] border border-yellow-500 uppercase transition-colors ${s.divinationCooldown <= 0 ? 'text-yellow-500 hover:bg-yellow-500/10 cursor-pointer' : 'text-yellow-500/30 border-yellow-500/20 cursor-not-allowed'}`}
+              >
+                {s.divinationCooldown > 0 ? `星象紊乱 [ ${Math.ceil(s.divinationCooldown)}s ]` : '[ 凝注群星 ] 进行占卜'}
+              </button>
             </div>
           )}
 
           {room.id === 'ShadowCorridor' && (
             <div className="flex flex-col gap-2 p-3 bg-[#2a111a] border border-[#aa5555]">
-               <div className="text-[10px] text-red-400/80 uppercase font-bold text-center border-b border-[#aa5555]/50 pb-1 mb-1">异空间入口</div>
-               <button 
-                 onClick={() => {
-                   s.status = 'chasing';
-                   s.chaseData = {
-                     playerRooms: 0,
-                     monsterDistance: -2, // Starts slightly behind
-                     targetRooms: 20,
-                     speed: 1.5 // rooms per second
-                   };
-                   addLog(s, `🏃 [警告] 你踏入了一条望不到尽头的长廊，身后传来令人不寒而栗的快速脚步声...`);
-                 }}
-                 className="w-full h-[36px] text-[12px] border border-red-500 text-red-500 uppercase transition-colors hover:bg-red-500/10 cursor-pointer"
-               >
-                 [ 踏入长廊 ] 未知追截
-               </button>
+              <div className="text-[10px] text-red-400/80 uppercase font-bold text-center border-b border-[#aa5555]/50 pb-1 mb-1">异空间入口</div>
+              <button
+                onClick={() => {
+                  s.status = 'chasing';
+                  s.chaseData = {
+                    playerRooms: 0,
+                    monsterDistance: -2, // Starts slightly behind
+                    targetRooms: 20,
+                    speed: 1.5 // rooms per second
+                  };
+                  addLog(s, `🏃 [警告] 你踏入了一条望不到尽头的长廊，身后传来令人不寒而栗的快速脚步声...`);
+                }}
+                className="w-full h-[36px] text-[12px] border border-red-500 text-red-500 uppercase transition-colors hover:bg-red-500/10 cursor-pointer"
+              >
+                [ 踏入长廊 ] 未知追截
+              </button>
             </div>
           )}
         </div>
@@ -1116,48 +1301,48 @@ const NpcStatePanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameStat
       </div>
 
       {aliveNpcs.length === 0 && (
-         <div className="text-[10px] text-[#8b949e] italic text-center py-4 border border-theme-border/30">
-           没有探测到任何敌意实体。
-         </div>
+        <div className="text-[10px] text-[#8b949e] italic text-center py-4 border border-theme-border/30">
+          没有探测到任何敌意实体。
+        </div>
       )}
 
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-         {aliveNpcs.map(npc => {
-            const hp = calcHP(npc.attrs);
-            const room = ROOMS[npc.loc];
-            return (
-              <div key={npc.id} className="border border-theme-red/20 p-2 relative bg-black/40">
-                <div className="absolute top-0 right-0 p-1 flex items-center justify-center">
-                  <div style={{
-                     borderLeft: '4px solid transparent',
-                     borderRight: '4px solid transparent',
-                     borderBottom: `8px solid ${npc.color}`,
-                  }} />
-                </div>
-                <div className="text-[10px] font-bold text-theme-red mb-1 tracking-widest">{npc.name}</div>
-                
-                <div className="flex justify-between items-center bg-black border border-theme-red/30 p-1 mb-2 relative overflow-hidden">
-                   <div className="absolute left-0 top-0 h-full bg-[linear-gradient(90deg,var(--color-theme-red),transparent)] opacity-20 transition-all duration-200" style={{ width: `${Math.min(100, Math.max(0, hp))}%` }}></div>
-                   <span className="font-semibold text-theme-red text-[9px] z-10 relative">HP</span>
-                   <span className="text-[12px] font-bold z-10 relative text-theme-red">{hp.toFixed(1)}</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-1 mb-2">
-                  {(Object.keys(ATTR_NAMES) as AttrType[]).map(key => (
-                    <div key={key} className="flex justify-between items-end text-[9px] px-1 border-b border-theme-red/10">
-                      <span className="text-theme-red/60">{ATTR_NAMES[key]}</span>
-                      <span className="text-theme-red font-bold font-mono">{npc.attrs[key].toFixed(1)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="text-[9px] text-theme-red/60 flex justify-between">
-                  <span>区域信号:</span>
-                  <span className="font-bold">{room.name}</span>
-                </div>
+        {aliveNpcs.map(npc => {
+          const hp = calcHP(npc.attrs);
+          const room = ROOMS[npc.loc];
+          return (
+            <div key={npc.id} className="border border-theme-red/20 p-2 relative bg-black/40">
+              <div className="absolute top-0 right-0 p-1 flex items-center justify-center">
+                <div style={{
+                  borderLeft: '4px solid transparent',
+                  borderRight: '4px solid transparent',
+                  borderBottom: `8px solid ${npc.color}`,
+                }} />
               </div>
-            );
-         })}
+              <div className="text-[10px] font-bold text-theme-red mb-1 tracking-widest">{npc.name}</div>
+
+              <div className="flex justify-between items-center bg-black border border-theme-red/30 p-1 mb-2 relative overflow-hidden">
+                <div className="absolute left-0 top-0 h-full bg-[linear-gradient(90deg,var(--color-theme-red),transparent)] opacity-20 transition-all duration-200" style={{ width: `${Math.min(100, Math.max(0, hp))}%` }}></div>
+                <span className="font-semibold text-theme-red text-[9px] z-10 relative">HP</span>
+                <span className="text-[12px] font-bold z-10 relative text-theme-red">{hp.toFixed(1)}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 mb-2">
+                {(Object.keys(ATTR_NAMES) as AttrType[]).map(key => (
+                  <div key={key} className="flex justify-between items-end text-[9px] px-1 border-b border-theme-red/10">
+                    <span className="text-theme-red/60">{ATTR_NAMES[key]}</span>
+                    <span className="text-theme-red font-bold font-mono">{npc.attrs[key].toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-[9px] text-theme-red/60 flex justify-between">
+                <span>区域信号:</span>
+                <span className="font-bold">{room.name}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1176,20 +1361,20 @@ const LogsPanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameState> }
       <div className="text-[12px] text-theme-cyan uppercase border-b border-theme-border pb-1 mb-3 shrink-0 flex items-center gap-2">
         通信日志
       </div>
-      
+
       <div className="flex-1 overflow-y-auto pr-1 text-[12px] leading-[1.6] text-[#8b949e]">
         {s.logs.map((log, idx) => {
           const isDanger = log.includes('⚔️') || log.includes('💀') || log.includes('🔴');
           const isCombatSystem = log.includes('警告') || log.includes('遭遇战');
           let colorCls = "border-theme-border";
           let txtCls = "text-[#8b949e]";
-          
+
           if (isDanger || isCombatSystem) {
-             colorCls = "border-theme-red";
-             txtCls = "text-theme-red";
+            colorCls = "border-theme-red";
+            txtCls = "text-theme-red";
           } else if (log.includes('系统') || log.includes('NPC') || log.includes('跳跃')) {
-             colorCls = "border-theme-cyan";
-             txtCls = "text-theme-cyan";
+            colorCls = "border-theme-cyan";
+            txtCls = "text-theme-cyan";
           }
 
           return (
@@ -1223,19 +1408,19 @@ const ReadingOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefO
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 font-mono">
       <div className="absolute inset-0 bg-[#0a0000] opacity-30 pointer-events-none" />
-      
+
       <div id="book-frame" className="relative w-full max-w-2xl bg-[#0f0a05] border-2 border-[#3d2b1f] p-8 sm:p-12 shadow-[0_0_50px_rgba(0,0,0,1)] overflow-hidden">
         {/* Progress Bar */}
         <div className="absolute top-0 left-0 w-full h-1 bg-theme-border/20">
           <div className="bg-theme-cyan h-full transition-all duration-300" style={{ width: `${(rd.timer / 10) * 100}%` }} />
         </div>
-        
+
         {/* Corruption Bar */}
         <div className="absolute top-2 right-4 text-[10px] text-theme-red uppercase tracking-widest font-bold">
           腐蚀度: {rd.corruption.toFixed(0)}%
         </div>
         <div className="absolute top-1 right-0 w-full h-[2px] bg-theme-red/10 overflow-hidden">
-           <div className="bg-theme-red h-full transition-all duration-100" style={{ width: `${rd.corruption}%` }} />
+          <div className="bg-theme-red h-full transition-all duration-100" style={{ width: `${rd.corruption}%` }} />
         </div>
 
         <div className="text-[12px] text-[#4d3a2b] uppercase mb-8 border-b border-[#3d2b1f] pb-2 flex justify-between items-center">
@@ -1278,105 +1463,105 @@ const CombatDialogOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<Ga
   return (
     <div className="absolute inset-0 z-[50] pointer-events-none flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      
-      <motion.div 
-         initial={{ opacity: 0, y: 10, scale: 0.98 }}
-         animate={{ opacity: 1, y: 0, scale: 1 }}
-         transition={{ duration: 0.4 }}
-         className="relative z-10 w-full max-w-4xl flex gap-4"
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="relative z-10 w-full max-w-4xl flex gap-4"
       >
         {/* Main Text Dialog */}
         <div className="flex-1 bg-[#0a0a0f] border border-theme-border/50 shadow-[0_0_40px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col">
-            <div className="h-1 w-full" style={{ backgroundImage: `linear-gradient(90deg, transparent, ${npc.color}, transparent)` }} />
-            <div className="px-6 py-4 border-b border-theme-border/30 flex justify-between items-center bg-black/50">
-               <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-gray-400">Encounter Data</span>
-               <span className="text-[11px] font-mono tracking-widest animate-pulse" style={{ color: npc.color }}>
-                 {cd.phase === 'starting' ? '>>> DETECTED' : cd.phase === 'rolling' ? '>>> ROLLING' : '>>> RESOLVING'}
-               </span>
-            </div>
-            <div className="p-6 sm:p-8 flex-1 flex items-center justify-center bg-black/80">
-              <motion.div 
-                key={cd.phase}
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-                className="text-[15px] sm:text-[17px] leading-[1.8] text-[#e0e0e0] font-sans font-medium tracking-wide w-full"
-              >
-                {cd.dialogText.split('\n').map((para, idx) => (
-                  <p key={idx} className="mb-3 last:mb-0 indent-8">{para}</p>
-                ))}
-              </motion.div>
-            </div>
+          <div className="h-1 w-full" style={{ backgroundImage: `linear-gradient(90deg, transparent, ${npc.color}, transparent)` }} />
+          <div className="px-6 py-4 border-b border-theme-border/30 flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-gray-400">Encounter Data</span>
+            <span className="text-[11px] font-mono tracking-widest animate-pulse" style={{ color: npc.color }}>
+              {cd.phase === 'starting' ? '>>> DETECTED' : cd.phase === 'rolling' ? '>>> ROLLING' : '>>> RESOLVING'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-8 flex-1 flex items-center justify-center bg-black/80">
+            <motion.div
+              key={cd.phase}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="text-[15px] sm:text-[17px] leading-[1.8] text-[#e0e0e0] font-sans font-medium tracking-wide w-full"
+            >
+              {cd.dialogText.split('\n').map((para, idx) => (
+                <p key={idx} className="mb-3 last:mb-0 indent-8">{para}</p>
+              ))}
+            </motion.div>
+          </div>
         </div>
 
         {/* Roller Window */}
         {(cd.phase === 'rolling' || cd.phase === 'resolving') && (
-            <motion.div
-               initial={{ opacity: 0, x: 20 }}
-               animate={{ opacity: 1, x: 0 }}
-               className="w-[300px] shrink-0 bg-[#0a0a0f] border border-theme-border/50 shadow-[0_0_40px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col"
-            >
-               <div className="h-1 w-full" style={{ backgroundImage: `linear-gradient(90deg, transparent, ${npc.color}, transparent)` }} />
-               <div className="px-4 py-3 border-b border-theme-border/30 bg-black/50 text-center text-[10px] uppercase tracking-widest text-gray-400">
-                  Attribute Roll
-               </div>
-               <div className="p-4 flex flex-col gap-4 bg-black/80 flex-1 justify-center">
-                  {cd.results.map(res => {
-                      const isRolling = cd.phase === 'rolling';
-                      const pRoll = isRolling ? (Math.random() * res.playerVal).toFixed(1) : res.playerVal.toFixed(1);
-                      const nRoll = isRolling ? (Math.random() * res.npcVal).toFixed(1) : res.npcVal.toFixed(1);
-                      
-                      const pWon = !isRolling && res.winner === 'player';
-                      const nWon = !isRolling && res.winner === 'npc';
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="w-[300px] shrink-0 bg-[#0a0a0f] border border-theme-border/50 shadow-[0_0_40px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col"
+          >
+            <div className="h-1 w-full" style={{ backgroundImage: `linear-gradient(90deg, transparent, ${npc.color}, transparent)` }} />
+            <div className="px-4 py-3 border-b border-theme-border/30 bg-black/50 text-center text-[10px] uppercase tracking-widest text-gray-400">
+              Attribute Roll
+            </div>
+            <div className="p-4 flex flex-col gap-4 bg-black/80 flex-1 justify-center">
+              {cd.results.map(res => {
+                const isRolling = cd.phase === 'rolling';
+                const pRoll = isRolling ? (Math.random() * res.playerVal).toFixed(1) : res.playerVal.toFixed(1);
+                const nRoll = isRolling ? (Math.random() * res.npcVal).toFixed(1) : res.npcVal.toFixed(1);
 
-                      return (
-                         <div key={res.attr} className="flex flex-col gap-1 relative">
-                             <div className="text-center text-[11px] text-gray-500 uppercase tracking-wider">{ATTR_NAMES[res.attr]}</div>
-                             <div className="flex justify-between items-center bg-black border border-theme-border/30 p-2">
-                                <div className={`font-mono text-[16px] font-bold transition-colors ${pWon ? 'text-theme-cyan' : isRolling ? 'text-gray-400' : 'text-gray-600'}`}>
-                                   {pRoll}
-                                </div>
-                                <div className="text-[10px] text-gray-600">VS</div>
-                                <div className={`font-mono text-[16px] font-bold transition-colors ${nWon ? 'text-theme-red' : isRolling ? 'text-gray-400' : 'text-gray-600'}`}>
-                                   {nRoll}
-                                </div>
-                             </div>
+                const pWon = !isRolling && res.winner === 'player';
+                const nWon = !isRolling && res.winner === 'npc';
 
-                             {/* Absorb Animation overlays */}
-                             {pWon && (
-                                <motion.div 
-                                    initial={{ x: '100%', opacity: 1 }}
-                                    animate={{ x: '0%', opacity: 0 }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                    className="absolute inset-0 bg-gradient-to-l from-theme-cyan/50 to-transparent pointer-events-none"
-                                />
-                             )}
-                             {nWon && !(s.debugInvincibleCombat || s.debugGodMode) && (
-                                <motion.div 
-                                    initial={{ x: '0%', opacity: 1 }}
-                                    animate={{ x: '100%', opacity: 0 }}
-                                    transition={{ duration: 0.8, ease: "easeOut" }}
-                                    className="absolute inset-0 bg-gradient-to-r from-theme-red/50 to-transparent pointer-events-none"
-                                />
-                             )}
-                             
-                             {!isRolling && res.winner !== 'draw' && (
-                                <div className="absolute top-[50%] left-[50%] -translate-x-[50%] -translate-y-[50%] z-10 w-full text-center drop-shadow-[0_0_5px_rgba(0,0,0,1)]">
-                                   <motion.span 
-                                      initial={{ y: 0, opacity: 1, scale: 1.5 }}
-                                      animate={{ y: -15, opacity: 0, scale: 1 }}
-                                      transition={{ duration: 1.5 }}
-                                      className={`text-[11px] font-bold ${pWon ? 'text-theme-cyan' : 'text-theme-red'}`}
-                                   >
-                                      {pWon ? '+' : '-'}{res.stealAmt.toFixed(1)} 吸取!
-                                   </motion.span>
-                                </div>
-                             )}
-                         </div>
-                      );
-                  })}
-               </div>
-            </motion.div>
+                return (
+                  <div key={res.attr} className="flex flex-col gap-1 relative">
+                    <div className="text-center text-[11px] text-gray-500 uppercase tracking-wider">{ATTR_NAMES[res.attr]}</div>
+                    <div className="flex justify-between items-center bg-black border border-theme-border/30 p-2">
+                      <div className={`font-mono text-[16px] font-bold transition-colors ${pWon ? 'text-theme-cyan' : isRolling ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {pRoll}
+                      </div>
+                      <div className="text-[10px] text-gray-600">VS</div>
+                      <div className={`font-mono text-[16px] font-bold transition-colors ${nWon ? 'text-theme-red' : isRolling ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {nRoll}
+                      </div>
+                    </div>
+
+                    {/* Absorb Animation overlays */}
+                    {pWon && (
+                      <motion.div
+                        initial={{ x: '100%', opacity: 1 }}
+                        animate={{ x: '0%', opacity: 0 }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        className="absolute inset-0 bg-gradient-to-l from-theme-cyan/50 to-transparent pointer-events-none"
+                      />
+                    )}
+                    {nWon && !(s.debugInvincibleCombat || s.debugGodMode) && (
+                      <motion.div
+                        initial={{ x: '0%', opacity: 1 }}
+                        animate={{ x: '100%', opacity: 0 }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        className="absolute inset-0 bg-gradient-to-r from-theme-red/50 to-transparent pointer-events-none"
+                      />
+                    )}
+
+                    {!isRolling && res.winner !== 'draw' && (
+                      <div className="absolute top-[50%] left-[50%] -translate-x-[50%] -translate-y-[50%] z-10 w-full text-center drop-shadow-[0_0_5px_rgba(0,0,0,1)]">
+                        <motion.span
+                          initial={{ y: 0, opacity: 1, scale: 1.5 }}
+                          animate={{ y: -15, opacity: 0, scale: 1 }}
+                          transition={{ duration: 1.5 }}
+                          className={`text-[11px] font-bold ${pWon ? 'text-theme-cyan' : 'text-theme-red'}`}
+                        >
+                          {pWon ? '+' : '-'}{res.stealAmt.toFixed(1)} 吸取!
+                        </motion.span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
         )}
       </motion.div>
     </div>
@@ -1401,69 +1586,69 @@ const DivinationOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<Game
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center font-mono bg-black/95 overflow-hidden">
-       {/* Particles */}
-       {isRevealed && Array.from({ length: 40 }).map((_, i) => {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = 100 + Math.random() * (isTower ? 500 : 300);
-          const x = Math.cos(angle) * dist;
-          const y = Math.sin(angle) * dist;
-          
-          return (
-            <motion.div
-              key={i}
-              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-              animate={{ x, y, opacity: 0, scale: Math.random() * 2 }}
-              transition={{ duration: 1 + Math.random() * 1.5, ease: "easeOut" }}
-              className="absolute w-2 h-2 rounded-full z-10"
-              style={{ backgroundColor: colorPrimary, top: '50%', left: '50%', marginTop: '-4px', marginLeft: '-4px' }}
-            />
-          );
-       })}
+      {/* Particles */}
+      {isRevealed && Array.from({ length: 40 }).map((_, i) => {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 100 + Math.random() * (isTower ? 500 : 300);
+        const x = Math.cos(angle) * dist;
+        const y = Math.sin(angle) * dist;
 
-       <div className="relative text-center flex flex-col items-center w-full max-w-sm z-20">
-         <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-[14px] sm:text-[18px] mb-8 tracking-[1rem] uppercase animate-[pulse_2s_ease-out_infinite]"
-            style={{ color: colorPrimary }}
-         >星象剥落</motion.div>
-         
-         {/* Tarot Card */}
-         <motion.div 
-            initial={{ rotateY: 180, scale: 0 }}
-            animate={{ 
-               rotateY: isRevealed ? 0 : 180, 
-               scale: isRevealed ? 1.1 : 0.9
-            }}
-            transition={{ duration: 1.0, type: "spring", bounce: 0.4 }}
-            className="w-[180px] sm:w-[220px] aspect-[2/3] border-2 relative flex flex-col items-center justify-center"
-            style={{ 
-               transformStyle: 'preserve-3d',
-               borderColor: isRevealed ? colorPrimary : '#333',
-               boxShadow: isRevealed ? `0 0 80px ${colorPrimary}40` : 'none',
-               background: isRevealed 
-                  ? (isTower ? 'linear-gradient(to bottom, #2a0000, black)' : 'linear-gradient(to bottom, #1a1400, black)')
-                  : '#111'
-            }}
-         >
-            
-            {/* Front of card */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-4 transition-opacity duration-300" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(0deg)', opacity: isRevealed ? 1 : 0 }}>
-                <h1 className="text-[28px] sm:text-[36px] font-bold tracking-widest leading-[1.2]" style={{ writingMode: 'vertical-rl', textOrientation: 'upright', color: colorPrimary }}>
-                   {tarotNames[res.card]}
-                </h1>
-            </div>
+        return (
+          <motion.div
+            key={i}
+            initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+            animate={{ x, y, opacity: 0, scale: Math.random() * 2 }}
+            transition={{ duration: 1 + Math.random() * 1.5, ease: "easeOut" }}
+            className="absolute w-2 h-2 rounded-full z-10"
+            style={{ backgroundColor: colorPrimary, top: '50%', left: '50%', marginTop: '-4px', marginLeft: '-4px' }}
+          />
+        );
+      })}
 
-            {/* Back of Card */}
-            <div className="absolute inset-0 bg-[#111] flex items-center justify-center transition-opacity duration-300" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', opacity: isRevealed ? 0 : 1 }}>
-              <div className="w-[60px] h-[60px] border border-white/20 rounded-full flex flex-col items-center justify-center relative">
-                 <div className="absolute inset-[10px] border border-white/10 rotate-45"></div>
-                 <div className="absolute inset-[10px] border border-white/10"></div>
-                 <div className="w-2 h-2 rounded-full bg-white/30 animate-pulse"></div>
-              </div>
+      <div className="relative text-center flex flex-col items-center w-full max-w-sm z-20">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-[14px] sm:text-[18px] mb-8 tracking-[1rem] uppercase animate-[pulse_2s_ease-out_infinite]"
+          style={{ color: colorPrimary }}
+        >星象剥落</motion.div>
+
+        {/* Tarot Card */}
+        <motion.div
+          initial={{ rotateY: 180, scale: 0 }}
+          animate={{
+            rotateY: isRevealed ? 0 : 180,
+            scale: isRevealed ? 1.1 : 0.9
+          }}
+          transition={{ duration: 1.0, type: "spring", bounce: 0.4 }}
+          className="w-[180px] sm:w-[220px] aspect-[2/3] border-2 relative flex flex-col items-center justify-center"
+          style={{
+            transformStyle: 'preserve-3d',
+            borderColor: isRevealed ? colorPrimary : '#333',
+            boxShadow: isRevealed ? `0 0 80px ${colorPrimary}40` : 'none',
+            background: isRevealed
+              ? (isTower ? 'linear-gradient(to bottom, #2a0000, black)' : 'linear-gradient(to bottom, #1a1400, black)')
+              : '#111'
+          }}
+        >
+
+          {/* Front of card */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 transition-opacity duration-300" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(0deg)', opacity: isRevealed ? 1 : 0 }}>
+            <h1 className="text-[28px] sm:text-[36px] font-bold tracking-widest leading-[1.2]" style={{ writingMode: 'vertical-rl', textOrientation: 'upright', color: colorPrimary }}>
+              {tarotNames[res.card]}
+            </h1>
+          </div>
+
+          {/* Back of Card */}
+          <div className="absolute inset-0 bg-[#111] flex items-center justify-center transition-opacity duration-300" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', opacity: isRevealed ? 0 : 1 }}>
+            <div className="w-[60px] h-[60px] border border-white/20 rounded-full flex flex-col items-center justify-center relative">
+              <div className="absolute inset-[10px] border border-white/10 rotate-45"></div>
+              <div className="absolute inset-[10px] border border-white/10"></div>
+              <div className="w-2 h-2 rounded-full bg-white/30 animate-pulse"></div>
             </div>
-         </motion.div>
-       </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };
@@ -1471,15 +1656,15 @@ const DivinationOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<Game
 // --- Warning Overlay Component ---
 const WarningOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameState> }) => {
   const s = stateRef.current;
-  
+
   return (
     <AnimatePresence>
       {s.showWarningTimer > 0 && (
         <motion.div
-           initial={{ opacity: 0 }}
-           animate={{ opacity: 1 }}
-           exit={{ opacity: 0, transition: { duration: 1.5 } }}
-           className="fixed inset-0 z-[200] flex items-center justify-center bg-black pointer-events-none"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 1.5 } }}
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black pointer-events-none"
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.8, filter: 'blur(10px)' }}
@@ -1489,7 +1674,7 @@ const WarningOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameSta
             className="text-theme-red font-bold text-center tracking-[0.5rem] sm:tracking-[1.5rem] text-[20px] sm:text-[32px]"
             style={{ textShadow: '0 0 30px rgba(255,0,0,1)' }}
           >
-             入此门者<br/><br/>当舍弃一切希望
+            入此门者<br /><br />当舍弃一切希望
           </motion.div>
         </motion.div>
       )}
@@ -1535,7 +1720,7 @@ export default function App() {
         const card = state.divinationResult.card;
         state.divinationResult = undefined;
         state.status = 'playing';
-        
+
         switch (card) {
           case 'hermit':
             playSound('reveal');
@@ -1557,11 +1742,11 @@ export default function App() {
             addLog(state, `🎴 塔罗牌《高塔》！你遭到反噬被定身！所有敌意实体被吸引到你的位置！`);
             state.trappedTimer = 4.0;
             state.npcs.forEach(npc => {
-               if (!npc.isDead) {
-                  npc.loc = state.playerLoc; // attract all NPCs directly
-                  npc.adaptedInRoom = false;
-                  npc.roomTimer = 0;
-               }
+              if (!npc.isDead) {
+                npc.loc = state.playerLoc; // attract all NPCs directly
+                npc.adaptedInRoom = false;
+                npc.roomTimer = 0;
+              }
             });
             if (state.invisibilityTimer <= 0) {
               checkCombat(state);
@@ -1569,176 +1754,236 @@ export default function App() {
             break;
         }
       }
-      return; 
+      return;
     }
 
     if (state.status === 'reading') {
-       const rd = state.readingData;
-       if (!rd) return;
-       rd.timer += dt;
-       
-       // Increase spawn timer
-       if (rd.spawnTimer === undefined) rd.spawnTimer = 0;
-       rd.spawnTimer += dt;
-       
-       // Difficulty based on book: spawn interval
-       const spawnInterval = rd.bookType === 50 ? 0.3 : 0.6; 
-       
-       // Spawn corruptions at intervals
-       if (rd.spawnTimer >= spawnInterval) {
-           rd.spawnTimer -= spawnInterval;
-           const normalWords = rd.words.filter(w => !w.isCorrupt);
-           if (normalWords.length > 0) {
-              const target = normalWords[Math.floor(Math.random() * normalWords.length)];
-              target.isCorrupt = true;
-           }
-       }
+      const rd = state.readingData;
+      if (!rd) return;
+      rd.timer += dt;
 
-       // Corruption is dynamically driven by the number of active corrupted words
-       const corruptedWordsCount = rd.words.filter(w => w.isCorrupt).length;
-       const rotRate = rd.bookType === 50 ? 3.0 : 2.0;
-       
-       // Suffer corruption growth based on how many words are currently corrupted over time
-       rd.corruption += (corruptedWordsCount * rotRate) * dt;
+      // Increase spawn timer
+      if (rd.spawnTimer === undefined) rd.spawnTimer = 0;
+      rd.spawnTimer += dt;
 
-       // If you reach or exceed 100%, you lose.
-       if (rd.corruption >= 100) {
-          rd.corruption = 100;
-          playSound('read_corrupt');
-          addLog(state, '🚫 [活体篡改失败] 书页彻底陷入疯狂。你的理智受到冲击。');
-          state.status = 'playing';
-          state.readingData = undefined;
-          state.playerAttrs.focus = snapVal(Math.max(0, state.playerAttrs.focus - 5));
-       } else if (rd.timer >= 10) {
-          const reward = rd.bookType === 50 ? 10 : 5;
-          playSound('read_clear');
-          addLog(state, `✅ [活体篡改成功] 你成功驱逐了书页上的疯狂。智力提升了 ${reward} 点。`);
-          state.playerAttrs.intelligence += reward;
-          state.completedBooks.push(rd.bookType);
-          state.status = 'playing';
-          state.readingData = undefined;
-       }
-       return;
+      // Difficulty based on book: spawn interval
+      const spawnInterval = rd.bookType === 50 ? 0.3 : 0.6;
+
+      // Spawn corruptions at intervals
+      if (rd.spawnTimer >= spawnInterval) {
+        rd.spawnTimer -= spawnInterval;
+        const normalWords = rd.words.filter(w => !w.isCorrupt);
+        if (normalWords.length > 0) {
+          const target = normalWords[Math.floor(Math.random() * normalWords.length)];
+          target.isCorrupt = true;
+        }
+      }
+
+      // Corruption is dynamically driven by the number of active corrupted words
+      const corruptedWordsCount = rd.words.filter(w => w.isCorrupt).length;
+      const rotRate = rd.bookType === 50 ? 3.0 : 2.0;
+
+      // Suffer corruption growth based on how many words are currently corrupted over time
+      rd.corruption += (corruptedWordsCount * rotRate) * dt;
+
+      // If you reach or exceed 100%, you lose.
+      if (rd.corruption >= 100) {
+        rd.corruption = 100;
+        playSound('read_corrupt');
+        addLog(state, '🚫 [活体篡改失败] 书页彻底陷入疯狂。你的理智受到冲击。');
+        state.status = 'playing';
+        state.readingData = undefined;
+        state.playerAttrs.focus = snapVal(Math.max(0, state.playerAttrs.focus - 5));
+      } else if (rd.timer >= 10) {
+        const reward = rd.bookType === 50 ? 10 : 5;
+        playSound('read_clear');
+        addLog(state, `✅ [活体篡改成功] 你成功驱逐了书页上的疯狂。智力提升了 ${reward} 点。`);
+        state.playerAttrs.intelligence += reward;
+        state.completedBooks.push(rd.bookType);
+        state.status = 'playing';
+        state.readingData = undefined;
+      }
+      return;
     }
 
     if (state.status === 'chasing') {
-        const cd = state.chaseData;
-        if (!cd) return;
-        cd.monsterDistance += cd.speed * dt;
-        
-        if (cd.monsterDistance >= cd.playerRooms) {
-            // caught
-            if (state.debugGodMode) {
-               addLog(state, '🟢 追逐战拦截：怪物触碰了你，但你处于【虚空无敌】状态，免于死亡。');
-               cd.monsterDistance = cd.playerRooms - 1; // push monster slightly back
-            } else {
-               addLog(state, '🔴 追逐战失败：身后的恶物将你拖入了虚无。');
-               state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-               state.status = 'gameover';
-               state.chaseData = undefined;
+      const cd = state.chaseData;
+      if (!cd) return;
+      
+      const deathRadius = 0.6;
+      
+      // Skill logic
+      if (!cd.hasUsedSkill && cd.playerRooms - cd.monsterDistance >= 3.0) {
+          cd.hasUsedSkill = true;
+          cd.skillState = 'charging';
+          cd.skillTimer = 0;
+          cd.skillTargetRoom = cd.playerRooms;
+          addLog(state, '⚠️ 身后的追截虚无突然停滞，狂暴的能量在它周身翻涌聚集！');
+      }
+
+      if (cd.skillState === 'charging') {
+          cd.skillTimer! += dt;
+          if (cd.skillTimer! >= 0.5) {
+              cd.skillState = 'striking';
+              cd.skillTimer = 0;
+              playSound('tower');
+              addLog(state, '⚔️ 虚无上下撕裂出漆黑的空洞，两股触手如利刃般暴射而出，完全锁死了前方和脚下的去路！');
+          }
+      } else if (cd.skillState === 'striking') {
+          cd.skillTimer! += dt;
+          
+          if (cd.skillTimer! >= 0.3) {
+             if (!cd.inSafeRoom && (cd.playerRooms === cd.skillTargetRoom || cd.playerRooms === cd.skillTargetRoom! + 1)) {
+                 if (!state.debugGodMode) {
+                     addLog(state, '🔴 追逐战失败：暴射的触手闪电般贯穿了你的身躯，将你拖入深渊。');
+                     state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+                     state.status = 'gameover';
+                     state.chaseData = undefined;
+                     return;
+                 }
+             }
+          }
+          
+          if (cd.skillTimer! >= 0.8) {
+              cd.skillState = undefined;
+              cd.skillTimer = undefined;
+              addLog(state, '一阵令人骨寒的撕裂声后，触手缩回了空洞，追踪怪物重新开始逼近...');
+          }
+      } else {
+          cd.monsterDistance += cd.speed * dt;
+          if (!cd.inSafeRoom && Math.abs(cd.monsterDistance - cd.playerRooms) < deathRadius) {
+            if (!state.debugGodMode) {
+              addLog(state, '🔴 追逐战失败：身后的恶物将你拖入了虚无。');
+              state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+              state.status = 'gameover';
+              state.chaseData = undefined;
+              return;
             }
-        } else if (cd.playerRooms >= cd.targetRooms) {
-            // escaped
-            addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的追击，回到了密道。');
-            state.status = 'playing';
-            state.chaseData = undefined;
-        }
-        return;
+          }
+      }
+
+      if (cd.playerRooms >= 17 && cd.isUpPath && !cd.safeRoomSpawned) {
+          addLog(state, `⚠️ 空间重组：台阶深处的黑暗中，另一道扭曲的阴影[降临虚无]凭空显现，正向下极速逼近！`);
+          cd.frontMonsterDistance = 19;
+          cd.frontMonsterActive = true;
+          cd.safeRoomSpawned = true;
+      }
+
+      if (cd.frontMonsterActive && cd.frontMonsterDistance !== undefined) {
+         cd.frontMonsterDistance -= cd.speed * dt;
+         if (!cd.inSafeRoom && Math.abs(cd.frontMonsterDistance - cd.playerRooms) < deathRadius) {
+             if (!state.debugGodMode) {
+                 addLog(state, '🔴 追逐战失败：你与迎面而来的降临虚无撞了个满怀，灵魂被彻底撕碎。');
+                 state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+                 state.status = 'gameover';
+                 state.chaseData = undefined;
+                 return;
+             }
+         }
+      }
+
+      if (!cd.inSafeRoom && cd.playerRooms >= cd.targetRooms) {
+        // escaped
+        addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的围剿，回到了密道。');
+        state.status = 'playing';
+        state.chaseData = undefined;
+      }
+      return;
     }
 
     if (state.status === 'combat' && state.combatData) {
-       const cd = state.combatData;
-       const npc = state.npcs.find(n => n.id === cd.npcId);
-       if (!npc) { state.status = 'playing'; state.combatData = undefined; return; }
+      const cd = state.combatData;
+      const npc = state.npcs.find(n => n.id === cd.npcId);
+      if (!npc) { state.status = 'playing'; state.combatData = undefined; return; }
 
-       cd.timer += dt;
+      cd.timer += dt;
 
-       // Adjust timing based on if it's first encounter
-       const startDuration = cd.isFirstEncounter ? 3.5 : 1.5;
-       
-       if (cd.phase === 'starting' && cd.timer > startDuration) {
-          cd.phase = 'rolling';
-          playDiceSound();
-          const roomName = ROOMS[state.playerLoc].name;
-          const combatTextLines: string[] = [];
-          cd.attrsCompared.forEach(attr => {
-              const text = ACTION_TEXTS[npc.color]?.[attr]?.replace('{room}', roomName) || '在撕裂的空间中发生了激烈的属性碰撞。';
-              combatTextLines.push(text);
-          });
-          cd.dialogText = combatTextLines.join('\n');
-       } else if (cd.phase === 'rolling' && cd.timer > startDuration + 2.0) {
-          cd.phase = 'resolving';
-          playAbsorbSound();
-          
-          let pWins = 0;
-          let nWins = 0;
-          let totalStolen = 0;
-          let totalLost = 0;
-          
-          cd.results.forEach(res => {
-              if (res.winner === 'player') {
-                  npc.attrs[res.attr] -= res.stealAmt;
-                  state.playerAttrs[res.attr] += res.stealAmt;
-                  pWins++;
-                  totalStolen += res.stealAmt;
-              } else if (res.winner === 'npc') {
-                  if (!(state.debugInvincibleCombat || state.debugGodMode)) {
-                      state.playerAttrs[res.attr] -= res.stealAmt;
-                      npc.attrs[res.attr] += res.stealAmt;
-                      totalLost += res.stealAmt;
-                  }
-                  nWins++;
-              }
-          });
-          state.playerAttrs = snapAll(state.playerAttrs);
-          npc.attrs = snapAll(npc.attrs);
+      // Adjust timing based on if it's first encounter
+      const startDuration = cd.isFirstEncounter ? 3.5 : 1.5;
 
-          if (pWins > nWins) {
-              const currentNpcHp = calcHP(npc.attrs);
-              if (currentNpcHp <= 0.1) {
-                  npc.isDead = true;
-                  cd.dialogText = `【抹灭殆尽】你将 ${npc.name} 彻底撕碎。它被彻底从这片维度抹除了。`;
-                  addLog(state, `💀 抹杀了实体。`);
-              } else {
-                  cd.dialogText = SUCCESS_TEXTS[npc.color] || '反击成功获得优势。';
-                  addLog(state, `🏆 局部压制，汲取 ${totalStolen.toFixed(1)} 点。`);
-              }
-          } else if (nWins > pWins) {
-               cd.dialogText = FAILURE_TEXTS[npc.color] || '遭到重创';
-               if ((state.debugInvincibleCombat || state.debugGodMode)) {
-                   cd.dialogText += '\n\n[Dev] 不死身免疫开启，未被夺走属性！';
-                   addLog(state, `🤖 免疫 ${totalLost.toFixed(1)} 点削弱。`);
-               } else {
-                   addLog(state, `🔴 失败，被剥夺 ${totalLost.toFixed(1)} 点参数。`);
-               }
+      if (cd.phase === 'starting' && cd.timer > startDuration) {
+        cd.phase = 'rolling';
+        playDiceSound();
+        const roomName = ROOMS[state.playerLoc].name;
+        const combatTextLines: string[] = [];
+        cd.attrsCompared.forEach(attr => {
+          const text = ACTION_TEXTS[npc.color]?.[attr]?.replace('{room}', roomName) || '在撕裂的空间中发生了激烈的属性碰撞。';
+          combatTextLines.push(text);
+        });
+        cd.dialogText = combatTextLines.join('\n');
+      } else if (cd.phase === 'rolling' && cd.timer > startDuration + 2.0) {
+        cd.phase = 'resolving';
+        playAbsorbSound();
+
+        let pWins = 0;
+        let nWins = 0;
+        let totalStolen = 0;
+        let totalLost = 0;
+
+        cd.results.forEach(res => {
+          if (res.winner === 'player') {
+            npc.attrs[res.attr] -= res.stealAmt;
+            state.playerAttrs[res.attr] += res.stealAmt;
+            pWins++;
+            totalStolen += res.stealAmt;
+          } else if (res.winner === 'npc') {
+            if (!(state.debugInvincibleCombat || state.debugGodMode)) {
+              state.playerAttrs[res.attr] -= res.stealAmt;
+              npc.attrs[res.attr] += res.stealAmt;
+              totalLost += res.stealAmt;
+            }
+            nWins++;
+          }
+        });
+        state.playerAttrs = snapAll(state.playerAttrs);
+        npc.attrs = snapAll(npc.attrs);
+
+        if (pWins > nWins) {
+          const currentNpcHp = calcHP(npc.attrs);
+          if (currentNpcHp <= 0.1) {
+            npc.isDead = true;
+            cd.dialogText = `【抹灭殆尽】你将 ${npc.name} 彻底撕碎。它被彻底从这片维度抹除了。`;
+            addLog(state, `💀 抹杀了实体。`);
           } else {
-              cd.dialogText = "你们的力量在真空中相互抵消，谁也无法奈何对方。空间封锁暂时解除。";
+            cd.dialogText = SUCCESS_TEXTS[npc.color] || '反击成功获得优势。';
+            addLog(state, `🏆 局部压制，汲取 ${totalStolen.toFixed(1)} 点。`);
           }
-       } else if (cd.phase === 'resolving' && cd.timer > startDuration + 6.0) {
-          if (calcHP(npc.attrs) <= 0) {
-             npc.isDead = true;
-             addLog(state, `📉 ${npc.name} 信号永久消失。`);
+        } else if (nWins > pWins) {
+          cd.dialogText = FAILURE_TEXTS[npc.color] || '遭到重创';
+          if ((state.debugInvincibleCombat || state.debugGodMode)) {
+            cd.dialogText += '\n\n[Dev] 不死身免疫开启，未被夺走属性！';
+            addLog(state, `🤖 免疫 ${totalLost.toFixed(1)} 点削弱。`);
+          } else {
+            addLog(state, `🔴 失败，被剥夺 ${totalLost.toFixed(1)} 点参数。`);
           }
-          if (calcHP(state.playerAttrs) <= 0) {
-             state.status = 'playing'; 
-             state.invisibilityTimer = Math.max(state.invisibilityTimer || 0, 3.0);
-             addLog(state, '🛡️ 战后保护屏障激活，短期内隐身避敌。');
-             state.combatData = undefined;
-             return;
-          }
-          if (!npc.isDead) { // Both survived: random teleport player
-             const allRoomIds = Object.keys(ROOMS) as RoomId[];
-             const validDestinations = allRoomIds.filter(r => r !== state.playerLoc);
-             const dest = validDestinations[Math.floor(Math.random() * validDestinations.length)];
-             state.playerLoc = dest;
-             addLog(state, `🌀 战后排斥引擎启动，自动紧急跳跃飞至 [${ROOMS[dest].name}]。`);
-          }
+        } else {
+          cd.dialogText = "你们的力量在真空中相互抵消，谁也无法奈何对方。空间封锁暂时解除。";
+        }
+      } else if (cd.phase === 'resolving' && cd.timer > startDuration + 6.0) {
+        if (calcHP(npc.attrs) <= 0) {
+          npc.isDead = true;
+          addLog(state, `📉 ${npc.name} 信号永久消失。`);
+        }
+        if (calcHP(state.playerAttrs) <= 0) {
           state.status = 'playing';
           state.invisibilityTimer = Math.max(state.invisibilityTimer || 0, 3.0);
           addLog(state, '🛡️ 战后保护屏障激活，短期内隐身避敌。');
           state.combatData = undefined;
-       }
-       return;
+          return;
+        }
+        if (!npc.isDead) { // Both survived: random teleport player
+          const allRoomIds = Object.keys(ROOMS) as RoomId[];
+          const validDestinations = allRoomIds.filter(r => r !== state.playerLoc);
+          const dest = validDestinations[Math.floor(Math.random() * validDestinations.length)];
+          state.playerLoc = dest;
+          addLog(state, `🌀 战后排斥引擎启动，自动紧急跳跃飞至 [${ROOMS[dest].name}]。`);
+        }
+        state.status = 'playing';
+        state.invisibilityTimer = Math.max(state.invisibilityTimer || 0, 3.0);
+        addLog(state, '🛡️ 战后保护屏障激活，短期内隐身避敌。');
+        state.combatData = undefined;
+      }
+      return;
     }
 
     // Death constraints independently...
@@ -1751,107 +1996,107 @@ export default function App() {
 
     // Check Death constraints independently
     if (pHP <= 0) {
-       addLog(state, '🔴 生命归零，你死亡了。游戏结束。');
-       state.status = 'gameover';
-       return;
+      addLog(state, '🔴 生命归零，你死亡了。游戏结束。');
+      state.status = 'gameover';
+      return;
     }
 
     if (state.npcs.every(n => n.isDead)) {
-       addLog(state, '🏆 所有危险实体生命归零，你获得了这场逃生试炼的最终胜利！');
-       state.status = 'gameover';
-       return;
+      addLog(state, '🏆 所有危险实体生命归零，你获得了这场逃生试炼的最终胜利！');
+      state.status = 'gameover';
+      return;
     }
 
     // 5. Global Events - Green Midnight Check
     state.globalEventTimer += dt;
     if (state.globalEventTimer >= 60.0 && !state.greenMidnight.active) {
-        state.globalEventTimer = 0;
-        state.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
-        addLog(state, `🟩 [全局事件] 绿色的午夜 已启动！起居室生成了扫地机炮台！`);
-        playSound('warning');
+      state.globalEventTimer = 0;
+      state.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
+      addLog(state, `🟩 [全局事件] 绿色的午夜 已启动！起居室生成了扫地机炮台！`);
+      playSound('warning');
     }
 
     if (state.greenMidnight.active) {
-        state.greenMidnight.timer += dt;
-        state.greenMidnight.angle = (state.greenMidnight.timer * 12) % 360; // 360 over 30s
-        if (state.greenMidnight.hitCooldown > 0) {
-            state.greenMidnight.hitCooldown -= dt;
+      state.greenMidnight.timer += dt;
+      state.greenMidnight.angle = (state.greenMidnight.timer * 12) % 360; // 360 over 30s
+      if (state.greenMidnight.hitCooldown > 0) {
+        state.greenMidnight.hitCooldown -= dt;
+      }
+
+      if (state.greenMidnight.timer >= 15.0) {
+        state.greenMidnight.active = false;
+        state.greenMidnight.timer = 0;
+        addLog(state, `🟩 [事件结束] 绿色的午夜已结束，炮台沉入阴影。`);
+      } else if (state.greenMidnight.hitCooldown <= 0 && state.status === 'playing') {
+        const origin = ROOM_LAYOUT['LivingRoom'];
+        const pLoc = ROOM_LAYOUT[state.playerLoc];
+        const dx = pLoc.x - origin.x;
+        const dy = pLoc.y - origin.y;
+
+        let isHit = false;
+        if (dx === 0 && dy === 0) {
+          isHit = true;
+        } else {
+          let angleToPlayer = Math.atan2(dy, dx) * 180 / Math.PI;
+          if (angleToPlayer < 0) angleToPlayer += 360;
+          const lAngle = state.greenMidnight.angle;
+          const beams = [lAngle, (lAngle + 90) % 360, (lAngle + 180) % 360, (lAngle + 270) % 360];
+          for (const beam of beams) {
+            let diff = Math.abs(angleToPlayer - beam);
+            if (diff > 180) diff = 360 - diff;
+            if (diff <= 10) { // 10 degrees tolerance
+              isHit = true;
+              break;
+            }
+          }
         }
 
-        if (state.greenMidnight.timer >= 15.0) {
-            state.greenMidnight.active = false;
-            state.greenMidnight.timer = 0;
-            addLog(state, `🟩 [事件结束] 绿色的午夜已结束，炮台沉入阴影。`);
-        } else if (state.greenMidnight.hitCooldown <= 0 && state.status === 'playing') {
-            const origin = ROOM_LAYOUT['LivingRoom'];
-            const pLoc = ROOM_LAYOUT[state.playerLoc];
-            const dx = pLoc.x - origin.x;
-            const dy = pLoc.y - origin.y;
-            
-            let isHit = false;
-            if (dx === 0 && dy === 0) {
-               isHit = true;
-            } else {
-               let angleToPlayer = Math.atan2(dy, dx) * 180 / Math.PI;
-               if (angleToPlayer < 0) angleToPlayer += 360;
-               const lAngle = state.greenMidnight.angle;
-               const beams = [lAngle, (lAngle+90)%360, (lAngle+180)%360, (lAngle+270)%360];
-               for (const beam of beams) {
-                   let diff = Math.abs(angleToPlayer - beam);
-                   if (diff > 180) diff = 360 - diff;
-                   if (diff <= 10) { // 10 degrees tolerance
-                       isHit = true;
-                       break;
-                   }
-               }
-            }
+        if (isHit && state.invisibilityTimer <= 0 && !(state.debugInfiniteInvisibility || state.debugGodMode)) {
+          const totalHP = calcHP(state.playerAttrs);
+          const toLoseTotal = totalHP * 0.3;
+          let toLose = toLoseTotal;
+          const attrs: AttrType[] = ['stamina', 'strength', 'patience', 'intelligence', 'focus'];
+          const shuffled = attrs.sort(() => 0.5 - Math.random());
 
-            if (isHit && state.invisibilityTimer <= 0 && !(state.debugInfiniteInvisibility || state.debugGodMode)) {
-                const totalHP = calcHP(state.playerAttrs);
-                const toLoseTotal = totalHP * 0.3;
-                let toLose = toLoseTotal;
-                const attrs: AttrType[] = ['stamina', 'strength', 'patience', 'intelligence', 'focus'];
-                const shuffled = attrs.sort(() => 0.5 - Math.random());
-                
-                for (const attr of shuffled) {
-                    if (toLose <= 0.01) break;
-                    const cVal = state.playerAttrs[attr];
-                    if (cVal > 0.01) {
-                        if (cVal >= toLose) {
-                            state.playerAttrs[attr] -= toLose;
-                            toLose = 0;
-                        } else {
-                            toLose -= cVal;
-                            state.playerAttrs[attr] = 0;
-                        }
-                    }
-                }
-                state.playerAttrs = snapAll(state.playerAttrs);
-                state.greenMidnight.hitCooldown = 1.0; 
-                addLog(state, `💥 [绿色的午夜] 致命绿光射中！你失去了总计 ${snapVal(toLoseTotal).toFixed(1)} 点属性！`);
-                playSound('hit');
+          for (const attr of shuffled) {
+            if (toLose <= 0.01) break;
+            const cVal = state.playerAttrs[attr];
+            if (cVal > 0.01) {
+              if (cVal >= toLose) {
+                state.playerAttrs[attr] -= toLose;
+                toLose = 0;
+              } else {
+                toLose -= cVal;
+                state.playerAttrs[attr] = 0;
+              }
             }
+          }
+          state.playerAttrs = snapAll(state.playerAttrs);
+          state.greenMidnight.hitCooldown = 1.0;
+          addLog(state, `💥 [绿色的午夜] 致命绿光射中！你失去了总计 ${snapVal(toLoseTotal).toFixed(1)} 点属性！`);
+          playSound('hit');
         }
+      }
     }
 
     // --- 绝对死局判定 ---
     const aliveNpcs = state.npcs.filter(n => !n.isDead);
     let potentialDeadEnd = true;
     for (const npc of aliveNpcs) {
-        const nHP = calcHP(npc.attrs);
-        if (pHP >= (nHP / 2) - 0.05) {
-           potentialDeadEnd = false; // Player can still fight at least this one
-           break;
-        }
+      const nHP = calcHP(npc.attrs);
+      if (pHP >= (nHP / 2) - 0.05) {
+        potentialDeadEnd = false; // Player can still fight at least this one
+        break;
+      }
     }
 
     if (potentialDeadEnd && aliveNpcs.length > 0) {
-       addLog(state, `⚠️ 【高维重力警告】`);
-       addLog(state, `💀 你的生命总额（${pHP.toFixed(1)}）已跌破所有存活敌人最低可用功率。`);
-       addLog(state, `🔴 绝对死局触发！在毫无胜算的数值黑洞面前，你被规则强制抹除！`);
-       state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-       state.status = 'gameover';
-       return;
+      addLog(state, `⚠️ 【高维重力警告】`);
+      addLog(state, `💀 你的生命总额（${pHP.toFixed(1)}）已跌破所有存活敌人最低可用功率。`);
+      addLog(state, `🔴 绝对死局触发！在毫无胜算的数值黑洞面前，你被规则强制抹除！`);
+      state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+      state.status = 'gameover';
+      return;
     }
 
     // 1. Process Player Reallocation
@@ -1868,208 +2113,208 @@ export default function App() {
     // 2. Process NPC Adaptation Timers & Movement
     let npcMoved = false;
     state.npcs.forEach(npc => {
-        if (npc.isDead) return;
-        const npcRoomDef = ROOMS[npc.loc];
-        if (npcRoomDef.attrs.length > 0 && !npc.adaptedInRoom) {
-          npc.roomTimer += dt;
-          if (npc.roomTimer >= 1.0) {
-            const nHP = calcHP(npc.attrs);
-            const splitAmount = snapVal(nHP / npcRoomDef.attrs.length);
+      if (npc.isDead) return;
+      const npcRoomDef = ROOMS[npc.loc];
+      if (npcRoomDef.attrs.length > 0 && !npc.adaptedInRoom) {
+        npc.roomTimer += dt;
+        if (npc.roomTimer >= 1.0) {
+          const nHP = calcHP(npc.attrs);
+          const splitAmount = snapVal(nHP / npcRoomDef.attrs.length);
 
-            const newNpcAttrs: Attributes = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-            npcRoomDef.attrs.forEach(a => {
-              newNpcAttrs[a] = splitAmount;
-            });
+          const newNpcAttrs: Attributes = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
+          npcRoomDef.attrs.forEach(a => {
+            newNpcAttrs[a] = splitAmount;
+          });
 
-            npc.attrs = snapAll(newNpcAttrs);
-            npc.adaptedInRoom = true;
-            // addLog(state, `🧟 ${npc.name} 在 ${npcRoomDef.name} 中完成了环境适应。`);
+          npc.attrs = snapAll(newNpcAttrs);
+          npc.adaptedInRoom = true;
+          // addLog(state, `🧟 ${npc.name} 在 ${npcRoomDef.name} 中完成了环境适应。`);
+        }
+      }
+
+      // 3. Process NPC Movement
+      npc.moveTimer += dt;
+      if (npc.moveTimer >= npc.nextMoveWait) {
+        npc.moveTimer = 0;
+        npc.nextMoveWait = 5 + 1.5 + Math.random(); // Next tick
+
+        const npcRoom = ROOMS[npc.loc];
+        const nextRoomId = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+
+        npc.loc = nextRoomId;
+        npc.roomTimer = 0;
+        npc.adaptedInRoom = false; // reset adaptation flag
+        npcMoved = true;
+
+        if (state.traps.includes(npc.loc)) {
+          state.traps = state.traps.filter(t => t !== npc.loc);
+          addLog(state, `🔥 [远处] 传来异响！${npc.name} 触发了厄运稻草人，全属性被强制削弱！`);
+          for (let key in npc.attrs) {
+            npc.attrs[key as AttrType] = Math.max(0, npc.attrs[key as AttrType] / 2);
           }
         }
-
-        // 3. Process NPC Movement
-        npc.moveTimer += dt;
-        if (npc.moveTimer >= npc.nextMoveWait) {
-          npc.moveTimer = 0;
-          npc.nextMoveWait = 5 + 1.5 + Math.random(); // Next tick
-
-          const npcRoom = ROOMS[npc.loc];
-          const nextRoomId = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
-          
-          npc.loc = nextRoomId;
-          npc.roomTimer = 0;
-          npc.adaptedInRoom = false; // reset adaptation flag
-          npcMoved = true;
-
-          if (state.traps.includes(npc.loc)) {
-             state.traps = state.traps.filter(t => t !== npc.loc);
-             addLog(state, `🔥 [远处] 传来异响！${npc.name} 触发了厄运稻草人，全属性被强制削弱！`);
-             for (let key in npc.attrs) {
-                npc.attrs[key as AttrType] = Math.max(0, npc.attrs[key as AttrType] / 2);
-             }
-          }
-        }
+      }
     });
-    
+
     if (npcMoved) {
-       addLog(state, `👣 检测到异常移动信号...`);
-       checkCombat(state); // Immediately check after movement loop
+      addLog(state, `👣 检测到异常移动信号...`);
+      checkCombat(state); // Immediately check after movement loop
     }
 
     // 4. Process Beast
     const b = state.beast;
     if (b.state === 'contained') {
-       if (state.debugInfiniteSatiety) {
-          b.satiety = 100;
-       } else if (state.isFeedingBeast && state.playerLoc === 'Dungeon') {
-          b.satiety += 15 * dt;
-          if (b.satiety > 100) b.satiety = 100;
-       } else {
-          b.satiety -= 2 * dt;
-       }
+      if (state.debugInfiniteSatiety) {
+        b.satiety = 100;
+      } else if (state.isFeedingBeast && state.playerLoc === 'Dungeon') {
+        b.satiety += 15 * dt;
+        if (b.satiety > 100) b.satiety = 100;
+      } else {
+        b.satiety -= 2 * dt;
+      }
 
-       if (b.satiety <= 0) {
-          b.satiety = 0;
-          b.state = 'escaped';
-          addLog(state, '🚨 警告：地牢怪物已突破收容！正在全区域猎杀！');
-       }
+      if (b.satiety <= 0) {
+        b.satiety = 0;
+        b.state = 'escaped';
+        addLog(state, '🚨 警告：地牢怪物已突破收容！正在全区域猎杀！');
+      }
     } else if (b.state === 'escaped') {
-       b.moveTimer += dt;
-       if (b.moveTimer >= 1.0) { // moves 1 room per second
-          b.moveTimer = 0;
-          const r = ROOMS[b.loc];
-          const nextId = r.adj[Math.floor(Math.random() * r.adj.length)];
-          b.loc = nextId;
-          addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
+      b.moveTimer += dt;
+      if (b.moveTimer >= 1.0) { // moves 1 room per second
+        b.moveTimer = 0;
+        const r = ROOMS[b.loc];
+        const nextId = r.adj[Math.floor(Math.random() * r.adj.length)];
+        b.loc = nextId;
+        addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
 
-          if (b.loc === state.playerLoc) {
-             if ((state.debugInfiniteInvisibility || state.debugGodMode)) {
-                // addLog(state, '⚠️ 狂暴怪物穿过了你，但未能察觉隐匿在阴影中的你。');
-             } else {
-                addLog(state, '💀 你被突脸的狂暴怪物瞬间撕碎。游戏结束。');
-                state.status = 'gameover';
-                return;
-             }
+        if (b.loc === state.playerLoc) {
+          if ((state.debugInfiniteInvisibility || state.debugGodMode)) {
+            // addLog(state, '⚠️ 狂暴怪物穿过了你，但未能察觉隐匿在阴影中的你。');
+          } else {
+            addLog(state, '💀 你被突脸的狂暴怪物瞬间撕碎。游戏结束。');
+            state.status = 'gameover';
+            return;
           }
-       }
+        }
+      }
     }
   };
 
 
-const ENCOUNTER_TEXTS: Record<string, string> = {
-  'white': "房间的温度毫无征兆地坠入了冰点。在微弱的光影交错间，一团苍白的雾气悄然凝聚成了模糊的三角锥形。它没有实体，没有动作，只有一个不断剥落又重组的虚假轮廓。仅仅是待在它附近，身上的热量就在被无声地抽走。相比觅食，它更像是一个迷失在高维度的悲哀残像，正试图将靠近的生者一同拖入死寂。",
-  '#ADD8E6': "伴随着一阵微弱却刺耳的电流高频嗡鸣，一个泛着淡蓝色冷光的几何构造体从半空中切割而出。它的棱角异常锐利，表面流转着扫描仪般的幽光。它像一台执行抹除程序的机器般悬浮了一瞬。紧接着，湛蓝的锁定光线交织成网，周围的空气仿佛被封死在真空罐里。",
-  '#a855f7': "极其强烈的精神撕裂感袭来，一尊散发着紫黑色微光的晶体凭空碾碎了前方的空间。当它悬浮在半空时，巨大且异样的引力场几乎要压断脊骨。处决式审判，已经降临。",
-  '#ef4444': "视线所及之处，一切都被染成了作呕铁锈味的血色。那是一个正在空间中剧烈搏动的深红多面体，像是在吞咽着这片维度。目光交汇的瞬间，心脏泵血完全失控，仿佛深渊本身正向你敞开怀抱。"
-};
+  const ENCOUNTER_TEXTS: Record<string, string> = {
+    'white': "房间的温度毫无征兆地坠入了冰点。在微弱的光影交错间，一团苍白的雾气悄然凝聚成了模糊的三角锥形。它没有实体，没有动作，只有一个不断剥落又重组的虚假轮廓。仅仅是待在它附近，身上的热量就在被无声地抽走。相比觅食，它更像是一个迷失在高维度的悲哀残像，正试图将靠近的生者一同拖入死寂。",
+    '#ADD8E6': "伴随着一阵微弱却刺耳的电流高频嗡鸣，一个泛着淡蓝色冷光的几何构造体从半空中切割而出。它的棱角异常锐利，表面流转着扫描仪般的幽光。它像一台执行抹除程序的机器般悬浮了一瞬。紧接着，湛蓝的锁定光线交织成网，周围的空气仿佛被封死在真空罐里。",
+    '#a855f7': "极其强烈的精神撕裂感袭来，一尊散发着紫黑色微光的晶体凭空碾碎了前方的空间。当它悬浮在半空时，巨大且异样的引力场几乎要压断脊骨。处决式审判，已经降临。",
+    '#ef4444': "视线所及之处，一切都被染成了作呕铁锈味的血色。那是一个正在空间中剧烈搏动的深红多面体，像是在吞咽着这片维度。目光交汇的瞬间，心脏泵血完全失控，仿佛深渊本身正向你敞开怀抱。"
+  };
 
-const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
-  'white': {
-    stamina: "幽影化作不可见的刺骨寒流席卷了{room}，你死死咬紧牙关，在极度低温中强行维持心脏跳动。",
-    strength: "苍白的虚影骤然膨胀狠狠撞来，你借助{room}内掩体死死撑住，对抗着那股试图将你推离当前维度的阴冷排斥力。",
-    patience: "怪物在{room}的阴暗处闪烁试图耗尽理智；你在死寂中默默倒数，等待它露出破绽的零点一秒。",
-    intelligence: "幽影扭曲了{room}的物理结构，你凭借记忆中的几何坐标进行心算，在倒错的瞬间找到唯一的平衡点躲过绞杀。",
-    focus: "整个{room}充斥着灵魂折损残音与雪花，你强忍眩晕，将视线死死钉在几何体核心唯一的实体上。"
-  },
-  '#ADD8E6': {
-    stamina: "巡卫释放的高压电弧封锁了{room}出路，在电网中，你依靠极限的肌肉拉扯翻滚闪避。",
-    strength: "合金构造体雷霆万钧地砸碎了{room}地板，你举起沉重杂物与这无情的机械生硬硬撼。",
-    patience: "蓝光在{room}扫掠；你蜷缩在死角犹如雕塑般纹丝不动，与它在毫秒间隐蔽博弈。",
-    intelligence: "光束折射暴露出致命运算逻辑，你在{room}穿梭并疯狂预判它的下一步封锁。",
-    focus: "在{room}致盲闪光中，你强忍刺痛，凝神捕捉悬浮引擎发出的微末气流声以定位。"
-  },
-  '#a855f7': {
-    stamina: "引力波将{room}气压翻倍，你顶着脏器破裂痛苦在极度缺氧的重压下艰难拉锯。",
-    strength: "紫晶凝结晶簇刺向要害，你怒吼挥舞武器在{room}中将晶壁生生砸碎。",
-    patience: "仿佛带污染的低语刺入脑海试图在{room}中同化你；你死死守着精神的最底层防线。",
-    intelligence: "判官正折叠{room}的维度，你强行用抽象拓扑学解析并拆解了它的引力囚笼。",
-    focus: "{room}被折射出数百重紫色幻象发起精神冲击，你专注过滤干扰，一击斩向本体的缝隙。"
-  },
-  '#ef4444': {
-    stamina: "猩红血雾灌满了{room}每一个角落，每一次呼吸都如同吞咽灼热碎玻璃，你硬抗剥离。",
-    strength: "血色多面体横扫了{room}，你在绝境中榨干爆发力，从正面硬生生扛下毁天灭地的一击。",
-    patience: "在被血色吞没的{room}里，你死压想要尖叫逃走的本能，静滞在血泊中等待时机。",
-    intelligence: "渊主无视{room}法则进行因果律抹杀，你榨干脑细胞在多维时间线上勉强推演生路。",
-    focus: "深红威压让{room}的光线扭曲，即使双眼逼出鲜血你也一刻不敢将感知从深渊中心移开半寸。"
-  }
-};
+  const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
+    'white': {
+      stamina: "幽影化作不可见的刺骨寒流席卷了{room}，你死死咬紧牙关，在极度低温中强行维持心脏跳动。",
+      strength: "苍白的虚影骤然膨胀狠狠撞来，你借助{room}内掩体死死撑住，对抗着那股试图将你推离当前维度的阴冷排斥力。",
+      patience: "怪物在{room}的阴暗处闪烁试图耗尽理智；你在死寂中默默倒数，等待它露出破绽的零点一秒。",
+      intelligence: "幽影扭曲了{room}的物理结构，你凭借记忆中的几何坐标进行心算，在倒错的瞬间找到唯一的平衡点躲过绞杀。",
+      focus: "整个{room}充斥着灵魂折损残音与雪花，你强忍眩晕，将视线死死钉在几何体核心唯一的实体上。"
+    },
+    '#ADD8E6': {
+      stamina: "巡卫释放的高压电弧封锁了{room}出路，在电网中，你依靠极限的肌肉拉扯翻滚闪避。",
+      strength: "合金构造体雷霆万钧地砸碎了{room}地板，你举起沉重杂物与这无情的机械生硬硬撼。",
+      patience: "蓝光在{room}扫掠；你蜷缩在死角犹如雕塑般纹丝不动，与它在毫秒间隐蔽博弈。",
+      intelligence: "光束折射暴露出致命运算逻辑，你在{room}穿梭并疯狂预判它的下一步封锁。",
+      focus: "在{room}致盲闪光中，你强忍刺痛，凝神捕捉悬浮引擎发出的微末气流声以定位。"
+    },
+    '#a855f7': {
+      stamina: "引力波将{room}气压翻倍，你顶着脏器破裂痛苦在极度缺氧的重压下艰难拉锯。",
+      strength: "紫晶凝结晶簇刺向要害，你怒吼挥舞武器在{room}中将晶壁生生砸碎。",
+      patience: "仿佛带污染的低语刺入脑海试图在{room}中同化你；你死死守着精神的最底层防线。",
+      intelligence: "判官正折叠{room}的维度，你强行用抽象拓扑学解析并拆解了它的引力囚笼。",
+      focus: "{room}被折射出数百重紫色幻象发起精神冲击，你专注过滤干扰，一击斩向本体的缝隙。"
+    },
+    '#ef4444': {
+      stamina: "猩红血雾灌满了{room}每一个角落，每一次呼吸都如同吞咽灼热碎玻璃，你硬抗剥离。",
+      strength: "血色多面体横扫了{room}，你在绝境中榨干爆发力，从正面硬生生扛下毁天灭地的一击。",
+      patience: "在被血色吞没的{room}里，你死压想要尖叫逃走的本能，静滞在血泊中等待时机。",
+      intelligence: "渊主无视{room}法则进行因果律抹杀，你榨干脑细胞在多维时间线上勉强推演生路。",
+      focus: "深红威压让{room}的光线扭曲，即使双眼逼出鲜血你也一刻不敢将感知从深渊中心移开半寸。"
+    }
+  };
 
-const SUCCESS_TEXTS: Record<string, string> = {
-  'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
-  '#ADD8E6': "伴随着机能过载火花，巡卫的外壳出现裂纹。你趁着死机空档抽走了少量能源。",
-  '#a855f7': "傲慢宣告戛然而止，引力囚笼崩塌。你抓住跌落间隙强行掠夺了部分法则。",
-  '#ef4444': "猩红的怒涛竟被硬生生逼退，血色翻涌间你逆流而上，野蛮撕下并吞噬了它的权柄。"
-};
+  const SUCCESS_TEXTS: Record<string, string> = {
+    'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
+    '#ADD8E6': "伴随着机能过载火花，巡卫的外壳出现裂纹。你趁着死机空档抽走了少量能源。",
+    '#a855f7': "傲慢宣告戛然而止，引力囚笼崩塌。你抓住跌落间隙强行掠夺了部分法则。",
+    '#ef4444': "猩红的怒涛竟被硬生生逼退，血色翻涌间你逆流而上，野蛮撕下并吞噬了它的权柄。"
+  };
 
-const FAILURE_TEXTS: Record<string, string> = {
-  'white': "彻骨阴寒穿透长空，轮廓在视觉中放大，带走了体温的同时也抽走了你的部分核心维系。",
-  '#ADD8E6': "在物理锁定下，冷酷的裁决光束无情削去了你的一部分能力基盘。",
-  '#a855f7': "如同实质的紫色重压将你摁在地上，你的高维潜能被审判官强行抽出、剥夺。",
-  '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
-};
+  const FAILURE_TEXTS: Record<string, string> = {
+    'white': "彻骨阴寒穿透长空，轮廓在视觉中放大，带走了体温的同时也抽走了你的部分核心维系。",
+    '#ADD8E6': "在物理锁定下，冷酷的裁决光束无情削去了你的一部分能力基盘。",
+    '#a855f7': "如同实质的紫色重压将你摁在地上，你的高维潜能被审判官强行抽出、剥夺。",
+    '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
+  };
 
 
-const playDiceSound = () => {
+  const playDiceSound = () => {
     try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
-        for (let i = 0; i < 15; i++) {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(400 + Math.random() * 400, ctx.currentTime + i * 0.1);
-            gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.1);
-            gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i * 0.1 + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.05);
-            osc.start(ctx.currentTime + i * 0.1);
-            osc.stop(ctx.currentTime + i * 0.1 + 0.06);
-        }
-    } catch (e) {}
-};
-
-const playAbsorbSound = () => {
-   try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      for (let i = 0; i < 15; i++) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(150, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.6);
-        gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.6);
-   } catch(e) {}
-};
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(400 + Math.random() * 400, ctx.currentTime + i * 0.1);
+        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.1);
+        gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime + i * 0.1 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.05);
+        osc.start(ctx.currentTime + i * 0.1);
+        osc.stop(ctx.currentTime + i * 0.1 + 0.06);
+      }
+    } catch (e) { }
+  };
+
+  const playAbsorbSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.6);
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.6);
+    } catch (e) { }
+  };
 
   // --- Combat Processing ---
   const checkCombat = (state: GameState) => {
     if (state.status !== 'playing' || state.showWarningTimer > 0) return;
-    
+
     // Find an enemy in the same room that isn't dead
     const npc = state.npcs.find(n => !n.isDead && n.loc === state.playerLoc);
 
     if (npc) {
       if (state.playerLoc === 'DressingRoom') {
-         return; 
+        return;
       }
 
       if (state.invisibilityTimer > 0 || (state.debugInfiniteInvisibility || state.debugGodMode)) {
-         return;
+        return;
       }
 
       if (state.pendingPlayerAttrs) {
-         state.pendingPlayerAttrs = null;
-         state.reallocTimer = 0;
-         addLog(state, `⚠️ 警告：重组进程因遭遇战被强制中断。`);
+        state.pendingPlayerAttrs = null;
+        state.reallocTimer = 0;
+        addLog(state, `⚠️ 警告：重组进程因遭遇战被强制中断。`);
       }
 
       const activeAttrs = ROOMS[state.playerLoc].attrs;
@@ -2081,11 +2326,11 @@ const playAbsorbSound = () => {
         let stealAmt = 0;
 
         if (pVal > nVal + 0.01) {
-            winner = 'player';
-            stealAmt = snapVal(nVal * 0.5);
+          winner = 'player';
+          stealAmt = snapVal(nVal * 0.5);
         } else if (nVal > pVal + 0.01) {
-            winner = 'npc';
-            stealAmt = snapVal(pVal * 0.5);
+          winner = 'npc';
+          stealAmt = snapVal(pVal * 0.5);
         }
 
         results.push({ attr: a, playerVal: pVal, npcVal: nVal, winner, stealAmt });
@@ -2094,20 +2339,20 @@ const playAbsorbSound = () => {
       state.status = 'combat';
       const isFirst = !npc.encountered;
       if (isFirst) {
-         npc.encountered = true;
+        npc.encountered = true;
       }
 
       state.combatData = {
-         timer: 0,
-         phase: 'starting',
-         roomId: state.playerLoc,
-         npcId: npc.id,
-         attrsCompared: activeAttrs,
-         results,
-         isFirstEncounter: isFirst,
-         dialogText: isFirst ? (ENCOUNTER_TEXTS[npc.color] || `你遭遇了 ${npc.name}`) : `⚔️ 空间封锁，引力交汇！你与 ${npc.name} 展开了对峙！`
+        timer: 0,
+        phase: 'starting',
+        roomId: state.playerLoc,
+        npcId: npc.id,
+        attrsCompared: activeAttrs,
+        results,
+        isFirstEncounter: isFirst,
+        dialogText: isFirst ? (ENCOUNTER_TEXTS[npc.color] || `你遭遇了 ${npc.name}`) : `⚔️ 空间封锁，引力交汇！你与 ${npc.name} 展开了对峙！`
       };
-      
+
       addLog(state, `[系统] 进入遭遇战状态。`);
     }
   };
@@ -2117,11 +2362,11 @@ const playAbsorbSound = () => {
     const s = stateRef.current;
     if (s.status !== 'playing') return;
     if (s.playerAttrs.intelligence < type) {
-       addLog(s, `💡 你的智力未达到 ${type}，借阅被拒绝。`);
-       forceRender();
-       return;
+      addLog(s, `💡 你的智力未达到 ${type}，借阅被拒绝。`);
+      forceRender();
+      return;
     }
-    
+
     const text = BOOK_TEXTS[type];
     // Split into smaller segments (like 4-5 characters) instead of full sentences for more click targets
     const rawWords = text.match(/.{1,4}/g) || [];
@@ -2134,8 +2379,8 @@ const playAbsorbSound = () => {
 
     // Randomize initial corruption (1 or 2 segments)
     const initialCorrupt = type === 50 ? 2 : 1;
-    for(let i=0; i<initialCorrupt; i++) {
-        if(words.length > 0) words[Math.floor(Math.random() * words.length)].isCorrupt = true;
+    for (let i = 0; i < initialCorrupt; i++) {
+      if (words.length > 0) words[Math.floor(Math.random() * words.length)].isCorrupt = true;
     }
 
     s.readingData = {
@@ -2156,17 +2401,17 @@ const playAbsorbSound = () => {
     if (s.status !== 'playing') return;
 
     if (s.trappedTimer > 0) {
-       addLog(s, `⛓️ 遭到高塔反噬，定身状态还有 ${Math.ceil(s.trappedTimer)} 秒解除。无法移动！`);
-       forceRender();
-       return;
+      addLog(s, `⛓️ 遭到高塔反噬，定身状态还有 ${Math.ceil(s.trappedTimer)} 秒解除。无法移动！`);
+      forceRender();
+      return;
     }
 
     if (s.beast.state === 'escaped' && targetId === s.beast.loc) {
-       s.playerLoc = targetId;
-       addLog(s, `💀 你冲进了狂暴怪物的房间，瞬间被撕碎。游戏结束。`);
-       s.status = 'gameover';
-       forceRender();
-       return;
+      s.playerLoc = targetId;
+      addLog(s, `💀 你冲进了狂暴怪物的房间，瞬间被撕碎。游戏结束。`);
+      s.status = 'gameover';
+      forceRender();
+      return;
     }
 
     s.playerLoc = targetId;
@@ -2187,8 +2432,8 @@ const playAbsorbSound = () => {
     playSound('start');
 
     s.divinationResult = {
-       card: selectedCard,
-       timer: 0
+      card: selectedCard,
+      timer: 0
     };
     s.status = 'divination';
     addLog(s, `✨ 开始星象仪占卜...`);
@@ -2209,27 +2454,27 @@ const playAbsorbSound = () => {
 
     let titleText = won ? 'TERMINATED_NPC' : 'TERMINATED';
     let descText = won ? '系统已接管洋馆。生存任务达成。' : '生命维持系统崩溃。游戏结束。';
-    
+
     if (killedByBeast) {
-       titleText = 'SLAUGHTERED';
-       descText = '你被狂暴的地牢实体撕碎，成为其腹中之物。生态收容彻底失败。';
+      titleText = 'SLAUGHTERED';
+      descText = '你被狂暴的地牢实体撕碎，成为其腹中之物。生态收容彻底失败。';
     } else if (pHP === 0 && !won) {
-       descText = '生命体征归零或落入绝对死局，意识被系统抹除。';
+      descText = '生命体征归零或落入绝对死局，意识被系统抹除。';
     }
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-6 font-mono">
         <div className="max-w-md w-full bg-[#1a0000] border border-theme-red/50 p-8 shadow-[0_0_20px_rgba(255,0,0,0.2)] text-center relative overflow-hidden">
           {won ? (
-             <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_20%,var(--color-theme-cyan)_50%,transparent_80%)] opacity-[0.03] pointer-events-none" />
+            <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_20%,var(--color-theme-cyan)_50%,transparent_80%)] opacity-[0.03] pointer-events-none" />
           ) : (
-             <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,var(--color-theme-red)_10px,var(--color-theme-red)_20px)] opacity-[0.03] pointer-events-none" />
+            <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,var(--color-theme-red)_10px,var(--color-theme-red)_20px)] opacity-[0.03] pointer-events-none" />
           )}
           <h1 className={`text-[40px] sm:text-[48px] mb-6 tracking-[4px] sm:tracking-[8px] uppercase font-bold relative z-10 ${won ? 'text-theme-cyan' : 'text-theme-red'}`}>
             {titleText}
           </h1>
           <p className="text-[#8b949e] mb-8 text-[14px] relative z-10">
-             {descText}
+            {descText}
           </p>
           <button
             onClick={() => {
@@ -2249,7 +2494,7 @@ const playAbsorbSound = () => {
 
   return (
     <div className="min-h-screen lg:h-screen bg-theme-bg p-2 sm:p-3 font-mono antialiased text-theme-text flex flex-col overflow-y-auto lg:overflow-hidden">
-      
+
       {/* Global Immersive Header (matches template HTML layout) */}
       <header className="bg-theme-card border border-theme-border flex items-center justify-between px-3 sm:px-5 py-0 h-[60px] shadow-[0_0_20px_rgba(0,0,0,0.5)] shrink-0 mb-[12px]">
         <div className="flex items-center gap-3">
@@ -2257,34 +2502,34 @@ const playAbsorbSound = () => {
             ENCOUNTER
           </div>
           {s.invisibilityTimer > 0 && (
-             <div className="flex bg-cyan-900/50 border border-theme-cyan text-theme-cyan text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_var(--color-theme-cyan)_inset]">
-                ✨ 虚无状态 (隐身) {Math.ceil(s.invisibilityTimer)}s
-             </div>
+            <div className="flex bg-cyan-900/50 border border-theme-cyan text-theme-cyan text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_var(--color-theme-cyan)_inset]">
+              ✨ 虚无状态 (隐身) {Math.ceil(s.invisibilityTimer)}s
+            </div>
           )}
           {s.beast.state === 'contained' && s.beast.satiety < 30 && (
-             <div className="hidden sm:flex bg-purple-900/50 border border-purple-500 text-purple-200 text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_purple_inset]">
-                📢 震耳嘶吼 (-50% 注意力)
-             </div>
+            <div className="hidden sm:flex bg-purple-900/50 border border-purple-500 text-purple-200 text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_purple_inset]">
+              📢 震耳嘶吼 (-50% 注意力)
+            </div>
           )}
         </div>
         <div className="flex items-center gap-[15px]">
           <span className="text-[12px] hidden sm:block">生命体征</span>
           {/* Health Bar using Immersive UI pattern structure inside Header */}
           <div className="w-[120px] sm:w-[300px] md:w-[400px] h-[24px] bg-black border border-theme-border relative">
-             <div 
-               className="h-full bg-[linear-gradient(90deg,var(--color-theme-red),#ff9999)] transition-all ease-out duration-300"
-               style={{ width: `${currentHP}%` }}
-             ></div>
-             <div className="absolute inset-0 w-full text-center text-[12px] leading-[24px] text-white pointer-events-none">
-               {currentHP.toFixed(1)} / 100
-             </div>
+            <div
+              className="h-full bg-[linear-gradient(90deg,var(--color-theme-red),#ff9999)] transition-all ease-out duration-300"
+              style={{ width: `${currentHP}%` }}
+            ></div>
+            <div className="absolute inset-0 w-full text-center text-[12px] leading-[24px] text-white pointer-events-none">
+              {currentHP.toFixed(1)} / 100
+            </div>
           </div>
         </div>
       </header>
 
       {/* Grid Viewport */}
       <div className="flex-1 lg:grid lg:grid-cols-[320px_1fr_280px] gap-[12px] relative w-full flex flex-col lg:min-h-0 lg:overflow-hidden pb-4 lg:pb-0">
-        
+
         {/* Left Column: State & Allocation */}
         <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col relative min-h-[420px] lg:h-full lg:overflow-hidden shrink-0">
           <PlayerStatePanel stateRef={stateRef} forceRender={forceRender} />
@@ -2303,119 +2548,119 @@ const playAbsorbSound = () => {
         {/* Right Column: Logs */}
         <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-hidden shrink-0 relative">
           {s.status === 'combat' ? (
-             <CombatSidebarPanel stateRef={stateRef} />
+            <CombatSidebarPanel stateRef={stateRef} />
           ) : (
-             <NpcStatePanel stateRef={stateRef} />
+            <NpcStatePanel stateRef={stateRef} />
           )}
           <LogsPanel stateRef={stateRef} />
 
           {/* Developer Debug Panel */}
           <div className="fixed top-[70px] right-2 z-[100] w-[260px] p-3 bg-black/80 backdrop-blur border border-blue-500/50 rounded flex flex-col gap-2 items-start text-blue-200 shadow-[0_0_15px_rgba(0,100,255,0.4)]">
-             <div className="text-[10px] uppercase font-bold tracking-widest opacity-80 border-b border-blue-500/30 w-full pb-1 mb-1 shadow-[0_1px_5px_rgba(0,100,255,0.2)]">/// Developer Dashboard ///</div>
-             
-             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-               <input 
-                 type="checkbox" 
-                 checked={!!s.debugInfiniteInvisibility}
-                 onChange={(e) => {
-                   stateRef.current.debugInfiniteInvisibility = e.target.checked;
-                   forceRender();
-                 }}
-                 className="w-3 h-3 accent-blue-500"
-               />
-               无限以太虚无 (绝对隐身)
-             </label>
+            <div className="text-[10px] uppercase font-bold tracking-widest opacity-80 border-b border-blue-500/30 w-full pb-1 mb-1 shadow-[0_1px_5px_rgba(0,100,255,0.2)]">/// Developer Dashboard ///</div>
 
-             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-               <input 
-                 type="checkbox" 
-                 checked={!!s.debugGodMode}
-                 onChange={(e) => {
-                   stateRef.current.debugGodMode = e.target.checked;
-                   forceRender();
-                 }}
-                 className="w-3 h-3 accent-red-500"
-               />
-               无敌状态 (隐身+免疫怪物与环境致死)
-             </label>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugInfiniteInvisibility}
+                onChange={(e) => {
+                  stateRef.current.debugInfiniteInvisibility = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-blue-500"
+              />
+              无限以太虚无 (绝对隐身)
+            </label>
 
-             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-               <input 
-                 type="checkbox" 
-                 checked={!!s.debugInvincibleCombat}
-                 onChange={(e) => {
-                   stateRef.current.debugInvincibleCombat = e.target.checked;
-                   forceRender();
-                 }}
-                 className="w-3 h-3 accent-blue-500"
-               />
-               不死身 (战败不被夺走属性)
-             </label>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugGodMode}
+                onChange={(e) => {
+                  stateRef.current.debugGodMode = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-red-500"
+              />
+              无敌状态 (隐身+免疫怪物与环境致死)
+            </label>
 
-             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-               <input 
-                 type="checkbox" 
-                 checked={!!s.debugInfiniteSatiety}
-                 onChange={(e) => {
-                   stateRef.current.debugInfiniteSatiety = e.target.checked;
-                   forceRender();
-                 }}
-                 className="w-3 h-3 accent-blue-500"
-               />
-               地牢饲育器 (无限饱食度)
-             </label>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugInvincibleCombat}
+                onChange={(e) => {
+                  stateRef.current.debugInvincibleCombat = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-blue-500"
+              />
+              不死身 (战败不被夺走属性)
+            </label>
 
-             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-               <input 
-                 type="checkbox" 
-                 checked={!!s.debugShowPaths}
-                 onChange={(e) => {
-                   stateRef.current.debugShowPaths = e.target.checked;
-                   forceRender();
-                 }}
-                 className="w-3 h-3 accent-blue-500"
-               />
-               显示全图寻路连接线
-             </label>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugInfiniteSatiety}
+                onChange={(e) => {
+                  stateRef.current.debugInfiniteSatiety = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-blue-500"
+              />
+              地牢饲育器 (无限饱食度)
+            </label>
 
-             <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
-               <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
-               <button
-                  onClick={() => {
-                     const isAc = stateRef.current.greenMidnight.active;
-                     if (isAc) {
-                        stateRef.current.greenMidnight.active = false;
-                        stateRef.current.greenMidnight.timer = 0;
-                        stateRef.current.logs.push(`[开发者] 强制中止 [绿色的午夜]`);
-                     } else {
-                        stateRef.current.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
-                        stateRef.current.logs.push(`[开发者] 强制触发 [绿色的午夜]`);
-                     }
-                     forceRender();
-                  }}
-                  className="bg-green-900/40 hover:bg-green-700 border border-green-500 text-[10px] px-2 py-1 text-white transition flex-1"
-               >
-                 {s.greenMidnight.active ? '中止 绿色的午夜' : '触发 [绿色的午夜]'}
-               </button>
-             </div>
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugShowPaths}
+                onChange={(e) => {
+                  stateRef.current.debugShowPaths = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-blue-500"
+              />
+              显示全图寻路连接线
+            </label>
 
-             <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-500/30 w-full justify-between">
-                <input id="devInputTotal" type="number" placeholder="总属性 (例: 100)" className="w-[120px] bg-[#001] border border-blue-500/50 text-[11px] px-1.5 py-1 text-white outline-none" />
-                <button
-                   onClick={() => {
-                      const val = parseFloat((document.getElementById('devInputTotal') as HTMLInputElement).value);
-                      if (val > 0) {
-                         const each = snapVal(val / 5);
-                         stateRef.current.playerAttrs = { stamina: each, strength: each, patience: each, intelligence: each, focus: each };
-                         stateRef.current.logs.push(`[开发者] 强制均分总属性为 ${val} (${each}x5)`);
-                         forceRender();
-                      }
-                   }}
-                   className="bg-blue-900/50 hover:bg-blue-600 border border-blue-500 text-[11px] px-2 py-1 text-white transition flex-1 cursor-pointer"
-                >
-                   设置总和
-                </button>
-             </div>
+            <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
+              <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
+              <button
+                onClick={() => {
+                  const isAc = stateRef.current.greenMidnight.active;
+                  if (isAc) {
+                    stateRef.current.greenMidnight.active = false;
+                    stateRef.current.greenMidnight.timer = 0;
+                    stateRef.current.logs.push(`[开发者] 强制中止 [绿色的午夜]`);
+                  } else {
+                    stateRef.current.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
+                    stateRef.current.logs.push(`[开发者] 强制触发 [绿色的午夜]`);
+                  }
+                  forceRender();
+                }}
+                className="bg-green-900/40 hover:bg-green-700 border border-green-500 text-[10px] px-2 py-1 text-white transition flex-1"
+              >
+                {s.greenMidnight.active ? '中止 绿色的午夜' : '触发 [绿色的午夜]'}
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-500/30 w-full justify-between">
+              <input id="devInputTotal" type="number" placeholder="总属性 (例: 100)" className="w-[120px] bg-[#001] border border-blue-500/50 text-[11px] px-1.5 py-1 text-white outline-none" />
+              <button
+                onClick={() => {
+                  const val = parseFloat((document.getElementById('devInputTotal') as HTMLInputElement).value);
+                  if (val > 0) {
+                    const each = snapVal(val / 5);
+                    stateRef.current.playerAttrs = { stamina: each, strength: each, patience: each, intelligence: each, focus: each };
+                    stateRef.current.logs.push(`[开发者] 强制均分总属性为 ${val} (${each}x5)`);
+                    forceRender();
+                  }
+                }}
+                className="bg-blue-900/50 hover:bg-blue-600 border border-blue-500 text-[11px] px-2 py-1 text-white transition flex-1 cursor-pointer"
+              >
+                设置总和
+              </button>
+            </div>
           </div>
         </aside>
 
