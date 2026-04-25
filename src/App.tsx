@@ -322,6 +322,7 @@ interface GameState {
   debugShowPaths?: boolean;
   debugGodMode?: boolean;
   debugInfiniteCoins?: boolean;
+  debugHideLogs?: boolean;
   debugShowIntentions?: boolean;
   debugDisableGreenMidnight?: boolean;
   rustedCoins: number;
@@ -3459,7 +3460,7 @@ export default function App() {
           ) : (
             <NpcStatePanel stateRef={stateRef} />
           )}
-          <LogsPanel stateRef={stateRef} />
+          {!s.debugHideLogs && <LogsPanel stateRef={stateRef} />}
 
           {/* Developer Debug Panel */}
           <motion.div
@@ -3594,6 +3595,19 @@ export default function App() {
                     className="w-3 h-3 accent-purple-500"
                   />
                   显示怪物意图追踪
+                </label>
+
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugHideLogs}
+                    onChange={(e) => {
+                      stateRef.current.debugHideLogs = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-gray-500"
+                  />
+                  隐藏通信日志
                 </label>
 
                 <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
