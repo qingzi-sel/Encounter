@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Shield, Swords, User, Map as MapIcon, Footprints, RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Shield, Swords, User, Map as MapIcon, Footprints, RotateCw, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
 
 // --- Global Audio Helper ---
@@ -176,29 +176,150 @@ interface RoomDef {
   name: string;
   attrs: AttrType[];
   adj: RoomId[];
+  desc: string;
 }
 
 const ROOMS: Record<RoomId, RoomDef> = {
-  LivingRoom: { id: 'LivingRoom', name: '起居室', attrs: ['stamina', 'focus'], adj: ['GreatHall', 'Yard', 'DressingRoom', 'GuestQuarters', 'Kitchen'] },
-  GreatHall: { id: 'GreatHall', name: '大礼堂', attrs: ['strength', 'intelligence', 'focus'], adj: ['LivingRoom', 'ThroneRoom', 'LordsChamber', 'GrandLibrary'] },
-  ThroneRoom: { id: 'ThroneRoom', name: '王座大厅', attrs: ['stamina', 'strength', 'patience', 'intelligence'], adj: ['GreatHall'] },
-  LordsChamber: { id: 'LordsChamber', name: '领主卧房', attrs: ['intelligence', 'patience'], adj: ['GreatHall', 'BellTower'] },
-  GrandLibrary: { id: 'GrandLibrary', name: '大图书馆', attrs: ['intelligence'], adj: ['GreatHall', 'AlchemyLab'] },
-  Observatory: { id: 'Observatory', name: '占星塔', attrs: ['focus'], adj: ['AlchemyLab'] },
-  BellTower: { id: 'BellTower', name: '钟楼', attrs: ['patience', 'focus'], adj: ['LordsChamber', 'ShadowCorridor'] },
-  AlchemyLab: { id: 'AlchemyLab', name: '炼金室', attrs: ['intelligence', 'focus'], adj: ['GrandLibrary', 'Observatory', 'GuestQuarters'] },
-  ShadowCorridor: { id: 'ShadowCorridor', name: '密道', attrs: ['stamina', 'patience'], adj: ['DressingRoom', 'BellTower', 'Greenhouse'] },
-  DressingRoom: { id: 'DressingRoom', name: '更衣室', attrs: [], adj: ['LivingRoom', 'ShadowCorridor', 'Chapel'] }, // 唯一的纯绝对安全区
-  GuestQuarters: { id: 'GuestQuarters', name: '贵宾室', attrs: ['stamina', 'focus'], adj: ['LivingRoom', 'AlchemyLab', 'WineCellar'] },
-  Greenhouse: { id: 'Greenhouse', name: '温室废园', attrs: ['strength', 'patience'], adj: ['ShadowCorridor', 'Armory'] },
-  Chapel: { id: 'Chapel', name: '礼拜堂', attrs: ['patience', 'intelligence', 'focus'], adj: ['DressingRoom', 'Yard', 'Armory'] },
-  Yard: { id: 'Yard', name: '城门庭院', attrs: ['stamina', 'strength'], adj: ['LivingRoom', 'MainGate', 'Chapel', 'Kitchen'] },
-  Kitchen: { id: 'Kitchen', name: '厨房', attrs: ['focus'], adj: ['LivingRoom', 'Yard', 'WineCellar'] },
-  WineCellar: { id: 'WineCellar', name: '酒窖', attrs: ['stamina', 'patience'], adj: ['GuestQuarters', 'Kitchen', 'Dungeon'] },
-  Armory: { id: 'Armory', name: '军械库', attrs: ['strength', 'stamina'], adj: ['Chapel', 'MainGate', 'Greenhouse'] },
-  MainGate: { id: 'MainGate', name: '城堡大门', attrs: ['strength', 'patience'], adj: ['Yard', 'Armory', 'Watchtower'] },
-  Watchtower: { id: 'Watchtower', name: '瞭望台', attrs: ['focus', 'intelligence'], adj: ['MainGate', 'Dungeon'] },
-  Dungeon: { id: 'Dungeon', name: '地牢', attrs: ['stamina', 'patience'], adj: ['Watchtower', 'WineCellar'] },
+  LivingRoom: { 
+    id: 'LivingRoom', 
+    name: '起居室', 
+    attrs: ['stamina', 'focus'], 
+    adj: ['GreatHall', 'Yard', 'DressingRoom', 'GuestQuarters', 'Kitchen'],
+    desc: '褪色的挂毯在无风的室内微微晃动，织物上的图案似乎正在缓慢变形。空气中浮动着一种类似腐烂花粉的甜腻气味，引诱着疲惫的头脑陷入永眠。'
+  },
+  GreatHall: { 
+    id: 'GreatHall', 
+    name: '大礼堂', 
+    attrs: ['strength', 'intelligence', 'focus'], 
+    adj: ['LivingRoom', 'ThroneRoom', 'LordsChamber', 'GrandLibrary'],
+    desc: '空旷的长桌上整齐地摆放着空空如也的银餐具。高耸的天花板隐没在黑暗中，仿佛那里悬浮着一个看不见的胃囊，正静静俯瞰着闯入者。'
+  },
+  ThroneRoom: { 
+    id: 'ThroneRoom', 
+    name: '王座大厅', 
+    attrs: ['stamina', 'strength', 'patience', 'intelligence'], 
+    adj: ['GreatHall'],
+    desc: '黄金与宝石在血色的余晖中黯淡无光。沉重的王座上并没有人，但当你凝视它时，总会感觉到一种强烈的、想要下跪并挖出自己双眼的冲动。'
+  },
+  LordsChamber: { 
+    id: 'LordsChamber', 
+    name: '领主卧房', 
+    attrs: ['intelligence', 'patience'], 
+    adj: ['GreatHall', 'BellTower'],
+    desc: '床幔后传来了极其细微、带有节奏的粘稠咀嚼声。这里的每一个阴影似乎都比外界要沉重数倍，几乎要将地板压塌。'
+  },
+  GrandLibrary: { 
+    id: 'GrandLibrary', 
+    name: '大图书馆', 
+    attrs: ['intelligence'], 
+    adj: ['GreatHall', 'AlchemyLab'],
+    desc: '书架上排列着无数用人皮装订的厚重书籍。当你路过时，书页会自发地翻动，发出如同无数个声音在同时低语的沙沙声。'
+  },
+  Observatory: { 
+    id: 'Observatory', 
+    name: '占星塔', 
+    attrs: ['focus'], 
+    adj: ['AlchemyLab'],
+    desc: '这里本应能看到星空，但望远镜的镜片里只映出一片令人作呕的、正在搏动的深紫色虚无。星辰的位置似乎在随着某种邪恶的意志而有规律地律动。'
+  },
+  BellTower: { 
+    id: 'BellTower', 
+    name: '钟楼', 
+    attrs: ['patience', 'focus'], 
+    adj: ['LordsChamber', 'ShadowCorridor'],
+    desc: '巨大的钟绳在空中摇曳，如同上吊者的脚尖在寻找支点。每一次风吹过塔顶，都会带起一阵让人精神衰弱的次声波共鸣。'
+  },
+  AlchemyLab: { 
+    id: 'AlchemyLab', 
+    name: '炼金室', 
+    attrs: ['intelligence', 'focus'], 
+    adj: ['GrandLibrary', 'Observatory', 'GuestQuarters'],
+    desc: '试管中沸腾着颜色异样的液体，偶尔会浮出一只带有复眼的胚胎。空气中充满了刺鼻的硫磺味，以及某种正在试图溶解你肺部的化学酸雾。'
+  },
+  ShadowCorridor: { 
+    id: 'ShadowCorridor', 
+    name: '密道', 
+    attrs: ['stamina', 'patience'], 
+    adj: ['DressingRoom', 'BellTower', 'Greenhouse'],
+    desc: '墙壁的石缝里渗出黑色的、带有温度的粘液。这里没有任何光线能照亮超过三步的范围，黑暗本身就像是有实体的流质，正试图钻入你的毛孔。'
+  },
+  DressingRoom: { 
+    id: 'DressingRoom', 
+    name: '更衣室', 
+    attrs: [], 
+    adj: ['LivingRoom', 'ShadowCorridor', 'Chapel'],
+    desc: '这里的镜子照出的并不是你的倒影，而是你内心深处最不愿面对的腐朽假象。唯有此处，那种时刻被窥视的压迫感会稍微减轻——但这或许只是深渊的诱饵。'
+  },
+  GuestQuarters: { 
+    id: 'GuestQuarters', 
+    name: '贵宾室', 
+    attrs: ['stamina', 'focus'], 
+    adj: ['LivingRoom', 'AlchemyLab', 'WineCellar'],
+    desc: '考究的软榻已经发霉，空气中残留着昂贵香水与尸臭混合后的怪异气息。你总觉得床底下有东西在蠕动，但看过去时却只有空洞的阴影。'
+  },
+  Greenhouse: { 
+    id: 'Greenhouse', 
+    name: '温室废园', 
+    attrs: ['strength', 'patience'], 
+    adj: ['ShadowCorridor', 'Armory'],
+    desc: '这里的植物有着半透明的、类似肉质的茎叶。它们不需要阳光，而是以空气中残留的绝望为食，偶尔会向路过者喷洒带有麻醉作用的孢子。'
+  },
+  Chapel: { 
+    id: 'Chapel', 
+    name: '礼拜堂', 
+    attrs: ['patience', 'intelligence', 'focus'], 
+    adj: ['DressingRoom', 'Yard', 'Armory'],
+    desc: '祭坛上供奉的并不是神像，而是一块形状不规则的黑色陨石。这里的祷告声变成了倒错的咒语，空气冷得能冻裂骨髓，却又带着某种神圣的疯狂感。'
+  },
+  Yard: { 
+    id: 'Yard', 
+    name: '城门庭院', 
+    attrs: ['stamina', 'strength'], 
+    adj: ['LivingRoom', 'MainGate', 'Chapel', 'Kitchen'],
+    desc: '枯萎的杂草间散落着无法辨认的石像残骸，它们的表情扭曲得超出了人类痛苦的极限。这里的空气中总弥漫着一股被雨水浸透的陈年灰烬味。'
+  },
+  Kitchen: { 
+    id: 'Kitchen', 
+    name: '厨房', 
+    attrs: ['focus'], 
+    adj: ['LivingRoom', 'Yard', 'WineCellar'],
+    desc: '巨大的铁锅里正炖煮着某些不可名状的软体组织。这里的屠宰刀即使没有人操作，也会偶尔发出清脆的撞击声，像是在渴望着新鲜的切口。'
+  },
+  WineCellar: { 
+    id: 'WineCellar', 
+    name: '酒窖', 
+    attrs: ['stamina', 'patience'], 
+    adj: ['GuestQuarters', 'Kitchen', 'Dungeon'],
+    desc: '沉重的木桶里装的并不是美酒，而是一种带有强烈诱幻性的、粘稠的黑色液体。空气中充满了发酵带来的酸味，以及某种正在木缝间生长的菌丝呼吸声。'
+  },
+  Armory: { 
+    id: 'Armory', 
+    name: '军械库', 
+    attrs: ['strength', 'stamina'], 
+    adj: ['Chapel', 'MainGate', 'Greenhouse'],
+    desc: '这里的盔甲看起来不像是给人穿的，更像是用来禁锢某些变形实体的铁笼。武器的刃口上流转着异样的紫光，似乎在渴求着不属于这个世界的鲜血。'
+  },
+  MainGate: { 
+    id: 'MainGate', 
+    name: '城堡大门', 
+    attrs: ['strength', 'patience'], 
+    adj: ['Yard', 'Armory', 'Watchtower'],
+    desc: '沉重的铁门布满铁锈，像两排巨大的、缺损的牙齿，死死咬合在风中。门轴发出的吱呀声像是某种垂死者的哀鸣。'
+  },
+  Watchtower: { 
+    id: 'Watchtower', 
+    name: '瞭望台', 
+    attrs: ['focus', 'intelligence'], 
+    adj: ['MainGate', 'Dungeon'],
+    desc: '狂风在高台上呼啸，你可以俯瞰整个荒芜的城堡。然而，城堡外的世界并不是大地，而是一片翻涌着的、不断吞噬光线的灰色迷雾。'
+  },
+  Dungeon: { 
+    id: 'Dungeon', 
+    name: '地牢', 
+    attrs: ['stamina', 'patience'], 
+    adj: ['Watchtower', 'WineCellar'],
+    desc: '锁链撞击石壁的声音在走廊里回荡。每一间牢房都像是一个深不见底的喉咙，从中传出的抓挠声和呜咽声已经持续了数个世纪。'
+  },
 };
 
 const DIST_TO_BELL_TOWER: Partial<Record<RoomId, number>> = {};
@@ -349,6 +470,7 @@ interface GameState {
 
   logs: string[];
   showWarningTimer: number;
+  showRoomDesc: boolean;
 }
 
 // --- Logic Helpers ---
@@ -481,6 +603,7 @@ function getInitialGameState(): GameState {
     },
     isFeedingBeast: false,
     glitchCycle: 60,
+    showRoomDesc: false,
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
       { id: 1, color: '#2563eb', name: '深蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'Kitchen' },
@@ -1374,6 +1497,19 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination, f
               </button>
             </div>
           )}
+
+          <div className="flex flex-col gap-2 p-3 bg-black/40 border border-theme-border/30">
+            <div className="text-[10px] text-theme-text/60 uppercase font-bold text-center border-b border-theme-border/20 pb-1 mb-1 tracking-widest">基础行动</div>
+            <button
+              onClick={() => {
+                s.showRoomDesc = true;
+                forceRender();
+              }}
+              className="w-full h-[36px] text-[12px] border border-theme-text/40 text-theme-text/80 hover:bg-theme-text/10 uppercase transition-all cursor-pointer font-bold"
+            >
+              [ 观察 ] 环境感知
+            </button>
+          </div>
 
           {room.id === 'GrandLibrary' && (
             <div className="flex flex-col gap-2 p-3 bg-theme-cyan/5 border border-theme-border">
@@ -2627,6 +2763,67 @@ const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
   }
 };
 
+const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void, tick: number }) => {
+  const s = stateRef.current;
+  if (!s.showRoomDesc) return null;
+  const room = ROOMS[s.playerLoc];
+
+  return (
+    <div className="absolute inset-0 z-[120] pointer-events-none flex items-center justify-center p-4">
+      <div 
+        className="absolute inset-0 bg-black/85 backdrop-blur-md pointer-events-auto" 
+        onClick={() => { s.showRoomDesc = false; forceRender(); }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative z-10 w-full max-w-2xl bg-[#0d0d0d] border border-[#222] shadow-[0_0_50px_rgba(0,0,0,1)] flex flex-col pointer-events-auto"
+      >
+        <div className="h-1 w-full bg-gradient-to-r from-transparent via-theme-cyan/40 to-transparent" />
+        
+        <div className="px-6 py-3 border-b border-white/5 flex justify-between items-center bg-black/30">
+          <span className="text-[11px] uppercase tracking-[0.3em] font-bold text-theme-text/50">Environmental Awareness</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-theme-cyan/60 animate-pulse">LOC: {room.id.toUpperCase()}</span>
+            <button 
+              onClick={() => { s.showRoomDesc = false; forceRender(); }}
+              className="text-theme-text/40 hover:text-white transition"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-8 sm:p-12">
+          <div className="mb-6 flex items-center gap-4">
+            <div className="w-12 h-px bg-theme-cyan/30" />
+            <h2 className="text-[20px] sm:text-[24px] font-bold tracking-[8px] text-theme-cyan uppercase">{room.name}</h2>
+            <div className="w-12 h-px bg-theme-cyan/30" />
+          </div>
+
+          <div className="text-[15px] sm:text-[17px] leading-[2.2] text-theme-text/90 font-serif tracking-wide text-justify indent-8 min-h-[120px]">
+            <CorruptedText text={room.desc} color="white" tick={tick} stateRef={stateRef} />
+          </div>
+          
+          <div className="mt-10 flex justify-center">
+            <button
+              onClick={() => { s.showRoomDesc = false; forceRender(); }}
+              className="px-10 py-2 border border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan transition-all uppercase text-[11px] tracking-[4px] font-bold"
+            >
+              [ 闭目冥思 ] 返回现实
+            </button>
+          </div>
+        </div>
+        
+        <div className="absolute bottom-2 right-4 text-[9px] font-mono text-white/10 uppercase tracking-widest pointer-events-none">
+          DeepMind // Eldritch Engine 1.0
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const SUCCESS_TEXTS: Record<string, string> = {
   'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
   '#2563eb': "那层脆弱的皮肤被你撕裂，冰冷的深海水体喷涌而出。你趁机掠夺了那些发光生物所携带的远古记忆碎片。",
@@ -3574,6 +3771,7 @@ export default function App() {
         <DivinationOverlay stateRef={stateRef} />
         <WarningOverlay stateRef={stateRef} />
         <CombatDialogOverlay stateRef={stateRef} tick={(s.combatData?.timer || 0) * 50} />
+        <RoomDescriptionOverlay stateRef={stateRef} forceRender={forceRender} tick={renderTick} />
 
         {/* Right Column: Logs */}
         <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-y-auto shrink-0 relative custom-scrollbar">
