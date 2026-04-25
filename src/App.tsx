@@ -225,6 +225,7 @@ interface CombatData {
 
 interface BeastState {
   satiety: number;
+  maxSatiety?: number;
   state: 'contained' | 'escaped';
   loc: RoomId;
   moveTimer: number;
@@ -278,7 +279,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing';
+  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -296,6 +297,9 @@ interface GameState {
   debugInfiniteSatiety?: boolean;
   debugShowPaths?: boolean;
   debugGodMode?: boolean;
+  debugInfiniteCoins?: boolean;
+  rustedCoins: number;
+  hasMetScavenger?: boolean;
   divinationResult?: {
     card: 'hermit' | 'wheel' | 'hanged' | 'tower';
     timer: number;
@@ -422,10 +426,13 @@ function getInitialGameState(): GameState {
     traps: [],
     trappedTimer: 0,
     debugInfiniteInvisibility: false,
+    debugInfiniteCoins: false,
+    rustedCoins: 0,
     globalEventTimer: 0,
     greenMidnight: { active: false, timer: 0, angle: 0, hitCooldown: 0 },
     beast: {
       satiety: 100,
+      maxSatiety: 100,
       state: 'contained',
       loc: 'Dungeon',
       moveTimer: 0,
@@ -1164,10 +1171,10 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
             <div className="bg-[#1a0000] border border-theme-red p-3 flex flex-col justify-center">
               <div className="flex justify-between items-center text-[10px] text-theme-red/80 mb-2 font-bold uppercase tracking-widest">
                 <span>⚠️ 收容实体饱食度</span>
-                <span>{Math.floor(s.beast.satiety)}%</span>
+                <span>{Math.floor(s.beast.satiety)} / {s.beast.maxSatiety || 100}</span>
               </div>
               <div className="w-full bg-black h-1.5 mb-3 border border-theme-red/30 flex overflow-hidden">
-                <div className="bg-theme-red h-full" style={{ width: `${Math.max(0, s.beast.satiety)}%` }}></div>
+                <div className="bg-theme-red h-full" style={{ width: `${Math.min(100, Math.max(0, s.beast.satiety / (s.beast.maxSatiety || 100) * 100))}%` }}></div>
               </div>
               <button
                 onPointerDown={() => { s.isFeedingBeast = true; }}
@@ -1245,6 +1252,18 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 className="w-full h-[36px] text-[12px] border border-red-500 text-red-500 uppercase transition-colors hover:bg-red-500/10 cursor-pointer"
               >
                 [ 踏入长廊 ] 未知追截
+              </button>
+            </div>
+          )}
+
+          {room.id === 'Armory' && (
+            <div className="flex flex-col gap-2 p-3 bg-[#0a0f0a] border border-[#1a2f1a]">
+              <div className="text-[10px] text-[#a0c5a0] uppercase font-bold text-center border-b border-[#1a2f1a]/50 pb-1 mb-1">废弃的行刑架</div>
+              <button
+                onClick={() => { s.status = s.hasMetScavenger ? 'shop' : 'shop_intro'; forceRender(); }}
+                className="w-full h-[36px] text-[12px] border border-[#708070] text-[#a0c5a0] hover:bg-[#708070]/20 uppercase transition-colors cursor-pointer"
+              >
+                [ 与盲眼的提灯拾荒者交易 ]
               </button>
             </div>
           )}
@@ -1450,6 +1469,130 @@ const ReadingOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefO
         </div>
       </div>
     </div>
+  );
+};
+
+const ShopIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'shop_intro') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#050a05] border border-[#1a2f1a] shadow-[0_0_40px_rgba(0,40,0,0.6)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#3a8f3a,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#1a2f1a] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#708070]">Entity Encounter</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#a0c5a0] animate-pulse">
+              {'>>> THE_BLIND_SCAVENGER'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#030603]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#a0c5a0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              “在满是铁锈的墙角阴影里，一个佝偻的无面生物正在咀嚼着一柄断剑。它察觉到了你的靠近，缓缓放下了手中散发着惨绿幽光的提灯。”
+              <br/><br/>
+              “这怪物长袍下延伸出来的，是由纯粹的影之触手所构成的密密麻麻的肢体。它那本该是脸的地方，只有一道深不可测的骇人裂口。”
+              <br/><br/>
+              “裂口对准了你，发出空灵而多重的低语：”
+              <br/><br/>
+              <span className="italic font-bold text-white">‘这座城堡正在被时间遗忘……交出那些锈蚀的记忆币，我愿意把我收集的小玩具借给你。’</span>
+            </div>
+            
+            <div className="mt-10 flex justify-center w-full">
+              <button 
+                onClick={() => { 
+                   s.status = 'shop'; 
+                   s.hasMetScavenger = true; 
+                   playSound('absorb'); 
+                   forceRender(); 
+                }} 
+                className="px-8 py-3 bg-transparent border border-[#3a8f3a] text-[#3a8f3a] hover:bg-[#3a8f3a]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 继续 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const ShopOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'shop') return null;
+
+  const handleBuy = (item: string, cost: number, onBuy: () => void) => {
+     if (!s.debugInfiniteCoins && s.rustedCoins < cost) {
+        addLog(s, `❌ 你的记忆币不足以支付代价...`);
+        forceRender();
+        return;
+     }
+     if (!s.debugInfiniteCoins) s.rustedCoins -= cost;
+     onBuy();
+     playSound('absorb');
+     forceRender();
+  };
+
+  return (
+     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 font-mono">
+       <div className="absolute inset-0 bg-[#0a0000] opacity-30 pointer-events-none" />
+       
+       <div className="relative w-full max-w-3xl bg-[#0a0f0a] border-2 border-[#1a2f1a] p-6 sm:p-10 shadow-[0_0_50px_rgba(0,40,0,0.5)] overflow-hidden flex flex-col gap-6">
+          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,var(--color-theme-green)_10px,var(--color-theme-green)_11px)] opacity-[0.02] pointer-events-none" />
+          
+          <h2 className="text-[#a0c5a0] text-[24px] uppercase tracking-widest font-bold border-b border-[#1a2f1a] pb-2 text-center">
+             【盲眼的提灯拾荒者】
+          </h2>
+
+          <div className="text-[14px] text-[#708070] italic text-center py-2">
+            “交出你收集的记忆币... 我会把这些小玩具借给你...”
+          </div>
+
+          <div className="text-right text-[#d4c3b5] text-[16px] font-bold">
+            当前持有: {s.debugInfiniteCoins ? '∞' : s.rustedCoins} 🪙 记忆币
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <button onClick={() => handleBuy('+5 力量', 10, () => { s.playerAttrs.strength += 5; addLog(s, '📦 拾荒者刺入了一股狂暴的铁锈入你体内，力量+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 局部肢体强化 (力量)</span>
+                <span className="text-[#d4c3b5]">10 🪙</span>
+             </button>
+             <button onClick={() => handleBuy('+5 耐力', 10, () => { s.playerAttrs.stamina += 5; addLog(s, '📦 拾荒者将粘稠的防腐剂灌入你的脉络，耐力+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 痛觉隔绝注射 (耐力)</span>
+                <span className="text-[#d4c3b5]">10 🪙</span>
+             </button>
+             <button onClick={() => handleBuy('时光沙漏', 20, () => { s.inventory.push('Hourglass'); addLog(s, '📦 获得了[时光沙漏]，可以直接瞬间重组属性。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-yellow-600 font-bold group-hover:text-yellow-400 transition">遗容碎片 [时光沙漏]</span>
+                <span className="text-[#d4c3b5]">20 🪙</span>
+             </button>
+             <button onClick={() => handleBuy('隐世药剂', 20, () => { s.inventory.push('EtherPotion'); addLog(s, '📦 获得了[隐世药剂]，使用后隐身30秒避开灾厄。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-cyan-600 font-bold group-hover:text-cyan-400 transition">深渊浓缩液 [隐世药剂]</span>
+                <span className="text-[#d4c3b5]">20 🪙</span>
+             </button>
+             <button onClick={() => handleBuy('厄运稻草人', 30, () => { s.inventory.push('StrawDoll'); addLog(s, '📦 获得了极度危险的[厄运稻草人]。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 30} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 30) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-purple-600 font-bold group-hover:text-purple-400 transition">受诅咒的扎草体 [厄运稻草人]</span>
+                <span className="text-[#d4c3b5]">30 🪙</span>
+             </button>
+             <button onClick={() => handleBuy('扩张血肉容槽', 25, () => { s.beast.maxSatiety = 150; s.beast.satiety += 50; addLog(s, '📦 拾荒者递给你一个扭动的肉块：[扩张血肉容槽]！地牢实体饱食度上限扩充至150%并回复了50。'); })} disabled={(s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${((s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+                <span className="text-red-500 font-bold group-hover:text-red-400 transition">扩张血肉容槽 (上限150%) {(s.beast.maxSatiety || 100) >= 150 && '[已扩充]'}</span>
+                <span className="text-[#d4c3b5]">25 🪙</span>
+             </button>
+          </div>
+
+          <div className="mt-4 flex justify-center">
+             <button onClick={() => { s.status = 'playing'; forceRender(); }} className="px-8 py-3 bg-transparent border border-[#708070] text-[#708070] hover:bg-[#708070]/20 hover:text-white transition uppercase tracking-widest font-bold">
+               [ 离开交易 ]
+             </button>
+          </div>
+       </div>
+     </div>
   );
 };
 
@@ -1884,7 +2027,8 @@ export default function App() {
 
       if (!cd.inSafeRoom && cd.playerRooms >= cd.targetRooms) {
         // escaped
-        addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的围剿，回到了密道。');
+        state.rustedCoins += 15;
+        addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的围剿，回到了密道。拾取了 15 枚记忆币。');
         state.status = 'playing';
         state.chaseData = undefined;
       }
@@ -1942,11 +2086,13 @@ export default function App() {
           const currentNpcHp = calcHP(npc.attrs);
           if (currentNpcHp <= 0.1) {
             npc.isDead = true;
-            cd.dialogText = `【抹灭殆尽】你将 ${npc.name} 彻底撕碎。它被彻底从这片维度抹除了。`;
-            addLog(state, `💀 抹杀了实体。`);
+            state.rustedCoins += 10;
+            cd.dialogText = `【抹灭殆尽】你将 ${npc.name} 彻底撕碎。它被彻底从这片维度抹除了。获取了 10 枚记忆币。`;
+            addLog(state, `💀 抹杀了实体，拾取了沉淀的光阴(记忆币) +10。`);
           } else {
-            cd.dialogText = SUCCESS_TEXTS[npc.color] || '反击成功获得优势。';
-            addLog(state, `🏆 局部压制，汲取 ${totalStolen.toFixed(1)} 点。`);
+            state.rustedCoins += 5;
+            cd.dialogText = SUCCESS_TEXTS[npc.color] || '反击成功获得优势。获取了 5 枚记忆币。';
+            addLog(state, `🏆 局部压制，汲取 ${totalStolen.toFixed(1)} 点。拾取了记忆币 +5。`);
           }
         } else if (nWins > pWins) {
           cd.dialogText = FAILURE_TEXTS[npc.color] || '遭到重创';
@@ -2164,11 +2310,12 @@ export default function App() {
     // 4. Process Beast
     const b = state.beast;
     if (b.state === 'contained') {
+      const bMax = b.maxSatiety || 100;
       if (state.debugInfiniteSatiety) {
-        b.satiety = 100;
+        b.satiety = bMax;
       } else if (state.isFeedingBeast && state.playerLoc === 'Dungeon') {
         b.satiety += 15 * dt;
-        if (b.satiety > 100) b.satiety = 100;
+        if (b.satiety > bMax) b.satiety = bMax;
       } else {
         b.satiety -= 2 * dt;
       }
@@ -2512,7 +2659,11 @@ export default function App() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-[15px]">
+        <div className="flex items-center gap-[5px] sm:gap-[15px]">
+          <div className="hidden sm:flex text-[10px] sm:text-[12px] bg-[#1a1410] border border-[#3d2b1f] text-[#a08b7a] px-2 py-1 items-center gap-2 shadow-[0_0_10px_rgba(61,43,31,0.5)_inset]">
+             <span>🪙 记忆币:</span>
+             <span className="font-bold text-[#d4c3b5]">{s.rustedCoins}</span>
+          </div>
           <span className="text-[12px] hidden sm:block">生命体征</span>
           {/* Health Bar using Immersive UI pattern structure inside Header */}
           <div className="w-[120px] sm:w-[300px] md:w-[400px] h-[24px] bg-black border border-theme-border relative">
@@ -2540,6 +2691,8 @@ export default function App() {
           <MapPanel stateRef={stateRef} handlePlayerMove={handlePlayerMove} startReading={startReading} startDivination={startDivination} />
         </main>
 
+        <ShopOverlay stateRef={stateRef} forceRender={forceRender} />
+        <ShopIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <ReadingOverlay stateRef={stateRef} forceRender={forceRender} />
         <DivinationOverlay stateRef={stateRef} />
         <WarningOverlay stateRef={stateRef} />
@@ -2608,6 +2761,19 @@ export default function App() {
                 className="w-3 h-3 accent-blue-500"
               />
               地牢饲育器 (无限饱食度)
+            </label>
+
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+              <input
+                type="checkbox"
+                checked={!!s.debugInfiniteCoins}
+                onChange={(e) => {
+                  stateRef.current.debugInfiniteCoins = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-yellow-600"
+              />
+              无尽财富 (无限记忆币)
             </label>
 
             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
