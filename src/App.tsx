@@ -298,7 +298,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'playing' | 'gameover' | 'reading' | 'divination' | 'combat' | 'shop_intro' | 'shop' | 'passage_intro' | 'passage_failure' | 'passage_victory' | 'inventory' | 'belltower_intro' | 'belltower_rung';
+  status: 'playing' | 'gameover' | 'reading' | 'divination' | 'combat' | 'shop_intro' | 'shop' | 'passage_intro' | 'passage_failure' | 'passage_victory' | 'inventory' | 'belltower_intro' | 'belltower_rung' | 'watchtower_intro';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -313,6 +313,9 @@ interface GameState {
   trappedTimer: number;
   bellCooldownTimer: number;
   bellAttractTimer: number;
+  lookoutMode: boolean;
+  lookoutPanX: number;
+  lookoutPanY: number;
   debugInfiniteInvisibility?: boolean;
   debugInvincibleCombat?: boolean;
   debugInfiniteSatiety?: boolean;
@@ -452,6 +455,9 @@ function getInitialGameState(): GameState {
     trappedTimer: 0,
     bellCooldownTimer: 0,
     bellAttractTimer: 0,
+    lookoutMode: false,
+    lookoutPanX: 0,
+    lookoutPanY: 0,
     debugInfiniteInvisibility: false,
     debugInfiniteCoins: false,
     rustedCoins: 0,
@@ -687,7 +693,7 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
       <div className="mt-4 border-t border-theme-border pt-4">
         <div className="flex justify-between items-center mb-2">
           <div className="text-[10px] text-theme-cyan/70 uppercase">快捷物品 (Quick Use)</div>
-          <button 
+          <button
             onClick={() => {
               s.status = 'inventory';
               forceRender();
@@ -809,10 +815,13 @@ const BOOK_TEXTS: Record<number, string> = {
   50: "当克苏鲁从拉莱耶沉睡中醒来，群星将回归正确的位置。拉莱耶的石柱是由非欧几何构造而成的，即使是最聪明的学者也无法理解其逻辑。那不可名状的恐怖，正在现实的裂缝中悄然生长。当你阅读这些文字时，你的灵魂已经与那个禁忌的世界产生了联系。不要回头看，不要听那些回响在虚空中的耳语。虚空在注视着你，而你也正在成为虚空的一部分。献祭你的理智，换取那片刻的真实。"
 };
 
-const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }: { stateRef: React.MutableRefObject<GameState>, handlePlayerMove: (targetId: RoomId) => void, startReading: (type: 20 | 50) => void, startDivination: () => void }) => {
+const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination, forceRender }: { stateRef: React.MutableRefObject<GameState>, handlePlayerMove: (targetId: RoomId) => void, startReading: (type: 20 | 50) => void, startDivination: () => void, forceRender: () => void }) => {
   const s = stateRef.current;
   const room = ROOMS[s.playerLoc];
   const [zoom, setZoom] = useState(1);
+  const [dragDelta, setDragDelta] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ mx: 0, my: 0 });
 
   const G_SPACING = 140; // Use this variable to adjust perfect gap width between rooms
 
@@ -886,16 +895,58 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
           </div>
         )}
         <div
-          className="relative w-full h-[360px] overflow-hidden bg-black/40 border border-theme-border/50 shadow-[0_0_20px_rgba(0,242,255,0.05)_inset] rounded-sm flex-shrink-0 cursor-crosshair"
+          className={`relative w-full h-[360px] overflow-hidden bg-black/40 border border-theme-border/50 shadow-[0_0_20px_rgba(0,242,255,0.05)_inset] rounded-sm flex-shrink-0 ${s.lookoutMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-crosshair'}`}
           onWheel={handleWheel}
+          onMouseDown={(e) => {
+            if (!s.lookoutMode) return;
+            isDraggingRef.current = true;
+            dragStartRef.current = { mx: e.clientX, my: e.clientY };
+            e.preventDefault();
+          }}
+          onMouseMove={(e) => {
+            if (!s.lookoutMode || !isDraggingRef.current) return;
+            const dx = (e.clientX - dragStartRef.current.mx) / zoom;
+            const dy = (e.clientY - dragStartRef.current.my) / zoom;
+            setDragDelta({ x: -dx, y: -dy });
+          }}
+          onMouseUp={(e) => {
+            if (!s.lookoutMode || !isDraggingRef.current) return;
+            isDraggingRef.current = false;
+            const dx = (e.clientX - dragStartRef.current.mx) / zoom;
+            const dy = (e.clientY - dragStartRef.current.my) / zoom;
+            s.lookoutPanX += -dx;
+            s.lookoutPanY += -dy;
+            setDragDelta({ x: 0, y: 0 });
+          }}
+          onMouseLeave={() => {
+            if (!s.lookoutMode || !isDraggingRef.current) return;
+            isDraggingRef.current = false;
+            s.lookoutPanX += dragDelta.x;
+            s.lookoutPanY += dragDelta.y;
+            setDragDelta({ x: 0, y: 0 });
+          }}
         >
+          {/* 瞭望模式退出按钮 */}
+          {s.lookoutMode && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-1">
+              <button
+                onClick={() => { s.lookoutMode = false; forceRender(); }}
+                className="px-4 py-1 bg-black/80 border border-blue-500/60 text-blue-300 text-[11px] uppercase tracking-widest hover:bg-blue-900/40 transition cursor-pointer backdrop-blur-sm"
+              >
+                [ 收回视线 ] 退出瞭望
+              </button>
+              <span className="text-[10px] text-blue-400/50 font-mono animate-pulse">拖动地图以探查各区域</span>
+            </div>
+          )}
           <div
             className="absolute w-0 h-0 transition-transform duration-700 ease-out"
             style={{
               left: '50%', top: '50%',
               transform: s.status === 'chasing' && s.chaseData
                 ? `scale(${zoom}) translate(${-chaseCamCoord.x * G_SPACING}px, ${-chaseCamCoord.y * G_SPACING}px)`
-                : `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
+                : s.lookoutMode
+                  ? `scale(${zoom}) translate(${-(s.lookoutPanX + dragDelta.x)}px, ${-(s.lookoutPanY + dragDelta.y)}px)`
+                  : `scale(${zoom}) translate(${-ROOM_LAYOUT[s.playerLoc].x * G_SPACING}px, ${-ROOM_LAYOUT[s.playerLoc].y * G_SPACING}px)`
             }}
           >
             {/* Connections */}
@@ -1369,7 +1420,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
               <div className="text-[10px] text-red-500 font-bold uppercase text-center border-b border-red-900/50 pb-1 mb-1 tracking-[2px]">
                 空间裂缝：异界入口
               </div>
-              
+
               {s.secretPassageCleared ? (
                 <div className="w-full py-2 bg-black/40 border border-green-900/30 text-green-500/50 text-[11px] uppercase text-center tracking-widest">
                   [ 裂缝已愈合 ]
@@ -1401,6 +1452,23 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 className="w-full h-[36px] text-[12px] border border-purple-600 text-purple-400 uppercase transition-all hover:bg-purple-600/20 hover:text-purple-300 cursor-pointer font-bold shadow-[0_0_10px_rgba(128,0,128,0.2)]"
               >
                 [ 靠近钟楼 ] 窥视高塔
+              </button>
+            </div>
+          )}
+
+          {room.id === 'Watchtower' && (
+            <div className="flex flex-col gap-2 p-3 bg-[#060a12] border border-[#1a2a40] shadow-[0_0_15px_rgba(30,80,180,0.15)]">
+              <div className="text-[10px] text-blue-400 font-bold uppercase text-center border-b border-blue-900/50 pb-1 mb-1 tracking-[2px]">
+                瞭望塔
+              </div>
+              <button
+                onClick={() => {
+                  s.status = 'watchtower_intro';
+                  forceRender();
+                }}
+                className="w-full h-[36px] text-[12px] border border-blue-700 text-blue-400 uppercase transition-all hover:bg-blue-700/20 hover:text-blue-300 cursor-pointer font-bold"
+              >
+                [ 登台瞭望 ] 俯瞰城堡全景
               </button>
             </div>
           )}
@@ -1672,6 +1740,65 @@ const ShopIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                 className="px-8 py-3 bg-transparent border border-[#3a8f3a] text-[#3a8f3a] hover:bg-[#3a8f3a]/20 hover:text-white transition uppercase tracking-widest font-bold"
               >
                 [ 继续 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const WatchtowerIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'watchtower_intro') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#050810] border border-[#1a2a40] shadow-[0_0_40px_rgba(30,80,180,0.4)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#3a7ab0,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#1a2a40] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#5a7090]">Watchtower Survey</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#90b0d0] animate-pulse">
+              {'>>> PANORAMIC_SCAN_MODE'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#030508]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#90b0d0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              "你攀上瞭望台的最高处，用双手扚住冰冷的石坠，将目光投向那片浓稠如墨汁的黑暗。"
+              <br /><br />
+              "城堡在你脚下静静地腐机着，走廊里有光在不规律地闪烁——那不是火焰，也不是电光，而是某种拥有自主意识的发光体，正懒洋洋地在墙壁之间爬行。"
+            </div>
+
+            <div className="mt-10 flex justify-center w-full gap-4">
+              <button
+                onClick={() => {
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#555] text-[#555] hover:bg-[#555]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 收回目光 ]
+              </button>
+              <button
+                onClick={() => {
+                  s.lookoutMode = true;
+                  s.lookoutPanX = ROOM_LAYOUT[s.playerLoc].x * 140;
+                  s.lookoutPanY = ROOM_LAYOUT[s.playerLoc].y * 140;
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#3a7ab0] text-[#90b0d0] hover:bg-[#3a7ab0]/20 hover:text-white transition uppercase tracking-widest font-bold cursor-pointer"
+              >
+                [ 登上顶端 ] 开始瞭望
               </button>
             </div>
           </div>
@@ -2024,7 +2151,7 @@ const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
   return (
     <div className="absolute inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-md" />
-      
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -2050,7 +2177,7 @@ const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                 const item = itemKey as ItemType;
                 const details = itemDetails[item];
                 if (!details) return null;
-                
+
                 return (
                   <div key={item} className={`border border-${details.color}-900/30 bg-black/40 p-4 flex flex-col gap-3 group hover:border-${details.color}-700/50 transition-colors`}>
                     <div className="flex justify-between items-start border-b border-[#1a2f3a] pb-2">
@@ -3156,6 +3283,11 @@ export default function App() {
   const handlePlayerMove = (targetId: RoomId) => {
     const s = stateRef.current;
     if (s.status !== 'playing') return;
+    if (s.lookoutMode) {
+      addLog(s, `🔭 正在瞭望中，无法移动。点击地图上方的"收回视线"按钮退出瞭望。`);
+      forceRender();
+      return;
+    }
 
     if (s.trappedTimer > 0) {
       addLog(s, `⛓️ 遭到高塔反噬，定身状态还有 ${Math.ceil(s.trappedTimer)} 秒解除。无法移动！`);
@@ -3303,7 +3435,7 @@ export default function App() {
 
         {/* Center Column: Map & Actions */}
         <main className="bg-[radial-gradient(circle_at_center,#1a202c_0%,#0a0b10_100%)] border border-theme-border p-3 sm:p-4 flex flex-col min-h-[500px] lg:h-full lg:overflow-y-auto shrink-0">
-          <MapPanel stateRef={stateRef} handlePlayerMove={handlePlayerMove} startReading={startReading} startDivination={startDivination} />
+          <MapPanel stateRef={stateRef} handlePlayerMove={handlePlayerMove} startReading={startReading} startDivination={startDivination} forceRender={forceRender} />
         </main>
 
         <InventoryOverlay stateRef={stateRef} forceRender={forceRender} />
@@ -3312,6 +3444,7 @@ export default function App() {
         <PassageIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <PassageFailureOverlay stateRef={stateRef} forceRender={forceRender} />
         <PassageVictoryOverlay stateRef={stateRef} forceRender={forceRender} />
+        <WatchtowerIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <BellTowerIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <BellTowerRungOverlay stateRef={stateRef} forceRender={forceRender} />
         <ReadingOverlay stateRef={stateRef} forceRender={forceRender} />
