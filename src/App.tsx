@@ -229,6 +229,7 @@ interface BeastState {
   state: 'contained' | 'escaped';
   loc: RoomId;
   moveTimer: number;
+  nextLoc: RoomId | null;
 }
 
 type ItemType = 'ether_potion' | 'hourglass' | 'straw_doll';
@@ -253,6 +254,7 @@ interface NpcState {
   adaptedInRoom: boolean;
   isDead: boolean;
   encountered?: boolean;
+  nextLoc: RoomId | null;
 }
 
 interface GreenMidnightState {
@@ -298,6 +300,8 @@ interface GameState {
   debugShowPaths?: boolean;
   debugGodMode?: boolean;
   debugInfiniteCoins?: boolean;
+  debugShowIntentions?: boolean;
+  debugDisableGreenMidnight?: boolean;
   rustedCoins: number;
   hasMetScavenger?: boolean;
   divinationResult?: {
@@ -436,13 +440,14 @@ function getInitialGameState(): GameState {
       state: 'contained',
       loc: 'Dungeon',
       moveTimer: 0,
+      nextLoc: 'WineCellar',
     },
     isFeedingBeast: false,
     npcs: [
-      { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false },
-      { id: 1, color: '#ADD8E6', name: '淡蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false },
-      { id: 2, color: '#a855f7', name: '紫晶判官', loc: 'AlchemyLab', attrs: { stamina: 14, strength: 14, patience: 14, intelligence: 14, focus: 14 }, moveTimer: 0, nextMoveWait: 2.5, roomTimer: 0, adaptedInRoom: false, isDead: false },
-      { id: 3, color: '#ef4444', name: '深红渊主', loc: 'ThroneRoom', attrs: { stamina: 20, strength: 20, patience: 20, intelligence: 20, focus: 20 }, moveTimer: 0, nextMoveWait: 2.8, roomTimer: 0, adaptedInRoom: false, isDead: false },
+      { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
+      { id: 1, color: '#2563eb', name: '深蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'Kitchen' },
+      { id: 2, color: '#a855f7', name: '紫晶判官', loc: 'AlchemyLab', attrs: { stamina: 14, strength: 14, patience: 14, intelligence: 14, focus: 14 }, moveTimer: 0, nextMoveWait: 2.5, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GuestQuarters' },
+      { id: 3, color: '#ef4444', name: '深红渊主', loc: 'ThroneRoom', attrs: { stamina: 20, strength: 20, patience: 20, intelligence: 20, focus: 20 }, moveTimer: 0, nextMoveWait: 2.8, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
     ],
     logs: ['[系统] 欢迎来到《Encounter 遭遇》。由于处于超重力区域，总属性上限受限，请先分配你的初始 20 点属性。'],
   };
@@ -912,6 +917,65 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                   </g>
                 )
               })()}
+              {/* Top-level Intent Arrow Layer */}
+              {s.debugShowIntentions && (
+                <g>
+                  <defs>
+                     <marker id="npc-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
+                      <polygon points="0 0, 6 3, 0 6" fill="currentColor" opacity="0.6" />
+                    </marker>
+                    <marker id="beast-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
+                      <polygon points="0 0, 6 3, 0 6" fill="purple" opacity="0.7" />
+                    </marker>
+                  </defs>
+                  {(() => {
+                    const arrows: React.ReactNode[] = [];
+                    s.npcs.forEach(n => {
+                      if (!n.isDead && n.nextLoc) {
+                        const u = ROOM_LAYOUT[n.loc];
+                        const v = ROOM_LAYOUT[n.nextLoc];
+                        arrows.push(
+                          <line
+                            key={`intent-npc-top-${n.id}`}
+                            x1={u.x * G_SPACING} y1={u.y * G_SPACING}
+                            x2={v.x * G_SPACING} y2={v.y * G_SPACING}
+                            stroke={n.color}
+                            strokeWidth="2"
+                            strokeDasharray="4 4"
+                            markerEnd="url(#npc-arrowhead-top)"
+                            className="animate-[pulse_2.1s_infinite]"
+                            opacity="0.5"
+                            style={{ filter: `drop-shadow(0 0 4px ${n.color})` }}
+                          >
+                            <animate attributeName="stroke-dashoffset" from="40" to="0" dur="4s" repeatCount="indefinite" />
+                          </line>
+                        );
+                      }
+                    });
+                    if (s.beast.state === 'escaped' && s.beast.nextLoc) {
+                      const u = ROOM_LAYOUT[s.beast.loc];
+                      const v = ROOM_LAYOUT[s.beast.nextLoc];
+                      arrows.push(
+                        <line
+                          key={`intent-beast-top`}
+                          x1={u.x * G_SPACING} y1={u.y * G_SPACING}
+                          x2={v.x * G_SPACING} y2={v.y * G_SPACING}
+                          stroke="purple"
+                          strokeWidth="2.5"
+                          strokeDasharray="4 4"
+                          markerEnd="url(#beast-arrowhead-top)"
+                          className="animate-[pulse_1.6s_infinite]"
+                          opacity="0.6"
+                          style={{ filter: 'drop-shadow(0 0 6px purple)' }}
+                        >
+                          <animate attributeName="stroke-dashoffset" from="40" to="0" dur="3s" repeatCount="indefinite" />
+                        </line>
+                      );
+                    }
+                    return arrows;
+                  })()}
+                </g>
+              )}
             </svg>
 
             {/* Rooms */}
@@ -1042,14 +1106,30 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                   <div className="flex gap-[6px] mt-[4px] h-[6px] items-center">
                     {isCurrent && <div className="w-[6px] h-[6px] bg-theme-cyan shadow-[0_0_8px_var(--color-theme-cyan)]" title="Player" />}
                     {npcsInR.map(n => (
-                      <div key={n.id} style={{
-                        borderLeft: '4px solid transparent',
-                        borderRight: '4px solid transparent',
-                        borderBottom: `8px solid ${n.color}`,
-                        filter: `drop-shadow(0 0 5px ${n.color})`
-                      }} className="animate-pulse" title={n.name} />
+                      <div key={n.id} className="flex items-center gap-0.5">
+                        <div style={{
+                          borderLeft: '4px solid transparent',
+                          borderRight: '4px solid transparent',
+                          borderBottom: `8px solid ${n.color}`,
+                          filter: `drop-shadow(0 0 5px ${n.color})`
+                        }} className="animate-pulse" title={n.name} />
+                        {s.debugShowIntentions && (
+                          <span className="text-[8px] font-bold leading-none" style={{ color: n.color }}>
+                            {(n.nextMoveWait - n.moveTimer).toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
                     ))}
-                    {isBeast && <div className="w-[6px] h-[6px] bg-purple-500 rounded-full shadow-[0_0_8px_purple] animate-ping" title="Beast" />}
+                    {isBeast && (
+                      <div className="flex items-center gap-0.5">
+                        <div className="w-[6px] h-[6px] bg-purple-500 rounded-full shadow-[0_0_8px_purple] animate-ping" title="Beast" />
+                        {s.debugShowIntentions && (
+                          <span className="text-[8px] font-bold text-purple-400 leading-none">
+                            {(1.0 - s.beast.moveTimer).toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {s.traps.includes(r.id as RoomId) && <div className="w-[6px] h-[6px] bg-yellow-500 rounded-sm shadow-[0_0_8px_yellow]" title="Trap" />}
                   </div>
                 </button>
@@ -1359,6 +1439,13 @@ const NpcStatePanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameStat
                 <span>区域信号:</span>
                 <span className="font-bold">{room.name}</span>
               </div>
+
+              {s.debugShowIntentions && (
+                <div className="text-[9px] text-theme-red/80 mt-1 flex justify-between border-t border-theme-red/10 pt-1">
+                  <span>下次位移:</span>
+                  <span className="font-bold text-yellow-500">{(npc.nextMoveWait - npc.moveTimer).toFixed(1)}s</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -1857,6 +1944,12 @@ export default function App() {
   const updateGame = (state: GameState, dt: number) => {
     if (state.status === 'gameover') return;
 
+    // --- Global Timers (Moved to top for safety) ---
+    if (state.showWarningTimer > 0) state.showWarningTimer = Math.max(0, state.showWarningTimer - dt);
+    if (state.divinationCooldown > 0) state.divinationCooldown = Math.max(0, state.divinationCooldown - dt);
+    if (state.invisibilityTimer > 0) state.invisibilityTimer = Math.max(0, state.invisibilityTimer - dt);
+    if (state.trappedTimer > 0) state.trappedTimer = Math.max(0, state.trappedTimer - dt);
+
     if (state.status === 'divination' && state.divinationResult) {
       state.divinationResult.timer += dt;
       if (state.divinationResult.timer > 3.0) {
@@ -2132,12 +2225,6 @@ export default function App() {
       return;
     }
 
-    // Death constraints independently...
-    if (state.showWarningTimer > 0) state.showWarningTimer = Math.max(0, state.showWarningTimer - dt);
-    if (state.divinationCooldown > 0) state.divinationCooldown = Math.max(0, state.divinationCooldown - dt);
-    if (state.invisibilityTimer > 0) state.invisibilityTimer = Math.max(0, state.invisibilityTimer - dt);
-    if (state.trappedTimer > 0) state.trappedTimer = Math.max(0, state.trappedTimer - dt);
-
     const pHP = calcHP(state.playerAttrs);
 
     // Check Death constraints independently
@@ -2155,7 +2242,7 @@ export default function App() {
 
     // 5. Global Events - Green Midnight Check
     state.globalEventTimer += dt;
-    if (state.globalEventTimer >= 60.0 && !state.greenMidnight.active) {
+    if (state.globalEventTimer >= 60.0 && !state.greenMidnight.active && !state.debugDisableGreenMidnight) {
       state.globalEventTimer = 0;
       state.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
       addLog(state, `🟩 [全局事件] 绿色的午夜 已启动！起居室生成了扫地机炮台！`);
@@ -2285,9 +2372,18 @@ export default function App() {
         npc.nextMoveWait = 5 + 1.5 + Math.random(); // Next tick
 
         const npcRoom = ROOMS[npc.loc];
-        const nextRoomId = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+        const nextRoomId = npc.nextLoc || npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+        
+        if (ROOMS[nextRoomId]) {
+            npc.loc = nextRoomId;
+            // Pre-calculate next destination for intent tracking
+            const newNpcRoom = ROOMS[npc.loc];
+            npc.nextLoc = newNpcRoom.adj[Math.floor(Math.random() * newNpcRoom.adj.length)];
+        } else {
+            console.error(`Invalid room target: ${nextRoomId}`);
+            npc.nextLoc = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+        }
 
-        npc.loc = nextRoomId;
         npc.roomTimer = 0;
         npc.adaptedInRoom = false; // reset adaptation flag
         npcMoved = true;
@@ -2330,8 +2426,16 @@ export default function App() {
       if (b.moveTimer >= 1.0) { // moves 1 room per second
         b.moveTimer = 0;
         const r = ROOMS[b.loc];
-        const nextId = r.adj[Math.floor(Math.random() * r.adj.length)];
-        b.loc = nextId;
+        const nextId = b.nextLoc || r.adj[Math.floor(Math.random() * r.adj.length)];
+        
+        if (ROOMS[nextId]) {
+            b.loc = nextId;
+            const nextR = ROOMS[b.loc];
+            b.nextLoc = nextR.adj[Math.floor(Math.random() * nextR.adj.length)];
+        } else {
+            b.nextLoc = r.adj[Math.floor(Math.random() * r.adj.length)];
+        }
+
         addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
 
         if (b.loc === state.playerLoc) {
@@ -2787,6 +2891,36 @@ export default function App() {
                 className="w-3 h-3 accent-blue-500"
               />
               显示全图寻路连接线
+            </label>
+
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-green-400">
+              <input
+                type="checkbox"
+                checked={!!s.debugDisableGreenMidnight}
+                onChange={(e) => {
+                  stateRef.current.debugDisableGreenMidnight = e.target.checked;
+                  if (e.target.checked && stateRef.current.greenMidnight.active) {
+                    stateRef.current.greenMidnight.active = false;
+                    stateRef.current.greenMidnight.timer = 0;
+                  }
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-green-500"
+              />
+              禁止绿色午夜按钮
+            </label>
+
+            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-purple-400">
+              <input
+                type="checkbox"
+                checked={!!s.debugShowIntentions}
+                onChange={(e) => {
+                  stateRef.current.debugShowIntentions = e.target.checked;
+                  forceRender();
+                }}
+                className="w-3 h-3 accent-purple-500"
+              />
+              显示怪物意图追踪
             </label>
 
             <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
