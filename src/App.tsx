@@ -281,7 +281,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro' | 'passage_intro' | 'passage_victory' | 'passage_failure';
+  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro' | 'passage_intro' | 'passage_victory' | 'passage_failure' | 'inventory';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -662,12 +662,23 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
 
       {/* Inventory Section */}
       <div className="mt-4 border-t border-theme-border pt-4">
-        <div className="text-[10px] text-theme-cyan/70 uppercase mb-2">以太背包 (Inventory)</div>
+        <div className="flex justify-between items-center mb-2">
+          <div className="text-[10px] text-theme-cyan/70 uppercase">快捷物品 (Quick Use)</div>
+          <button 
+            onClick={() => {
+              s.status = 'inventory';
+              forceRender();
+            }}
+            className="text-[10px] text-theme-cyan hover:text-white border border-theme-cyan/50 hover:border-theme-cyan px-2 py-0.5 rounded-sm transition-colors cursor-pointer"
+          >
+            [ 展开背包 ]
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {s.inventory.length === 0 ? (
             <span className="text-[10px] text-theme-text/30">空无一物...</span>
           ) : (
-            s.inventory.map((item, idx) => {
+            s.inventory.slice(0, 3).map((item, idx) => {
               return (
                 <button
                   key={idx}
@@ -697,12 +708,15 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                       forceRender();
                     }
                   }}
-                  className="border border-yellow-500/50 bg-black text-yellow-500 p-1 px-2 text-[10px] hover:bg-yellow-500/20 uppercase"
+                  className="border border-yellow-500/50 bg-black text-yellow-500 p-1 px-2 text-[10px] hover:bg-yellow-500/20 uppercase cursor-pointer"
                 >
-                  {item === 'ether_potion' ? '隐世药剂' : item === 'hourglass' ? '时光沙漏' : '厄运稻草人'}
+                  [{item === 'ether_potion' ? '隐世药剂' : item === 'hourglass' ? '时光沙漏' : '厄运稻草人'}]
                 </button>
               );
             })
+          )}
+          {s.inventory.length > 3 && (
+            <span className="text-[10px] text-theme-text/50 self-center ml-1">+{s.inventory.length - 3} 更多...</span>
           )}
         </div>
       </div>
@@ -1801,6 +1815,114 @@ const PassageVictoryOverlay = ({ stateRef, forceRender }: { stateRef: React.Muta
     </div>
   );
 };
+const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'inventory') return null;
+
+  // Count items to group them
+  const itemCounts = s.inventory.reduce((acc, item) => {
+    acc[item] = (acc[item] || 0) + 1;
+    return acc;
+  }, {} as Record<ItemType, number>);
+
+  const handleUseItem = (item: ItemType) => {
+    const itemIndex = s.inventory.indexOf(item);
+    if (itemIndex > -1) {
+      s.inventory.splice(itemIndex, 1);
+      if (item === 'ether_potion') {
+        s.invisibilityTimer = 5.0;
+        addLog(s, `✨ 你饮下了【隐世药剂】，获得了虚无状态！`);
+      } else if (item === 'hourglass') {
+        s.instantReallocActive = true;
+        addLog(s, `⏳ 【时光沙漏】已激活！下一次属性重组将瞬间完成！`);
+      } else if (item === 'straw_doll') {
+        s.traps.push(s.playerLoc as RoomId);
+        addLog(s, `🔥 你在 ${ROOMS[s.playerLoc as RoomId].name} 放置了【厄运稻草人】。`);
+        const npcInRoom = s.npcs.find(n => !n.isDead && n.loc === s.playerLoc);
+        if (npcInRoom) {
+          s.traps = s.traps.filter(t => t !== s.playerLoc);
+          addLog(s, `🔥 刚放置的厄运稻草人立即被 ${npcInRoom.name} 触发，全属性强制削弱！`);
+          for (let key in npcInRoom.attrs) {
+            npcInRoom.attrs[key as AttrType] = Math.max(0, npcInRoom.attrs[key as AttrType] / 2);
+          }
+        }
+      }
+      forceRender();
+    }
+  };
+
+  const itemDetails: Record<ItemType, { name: string, desc: string, color: string }> = {
+    'ether_potion': { name: '深渊浓缩液 [隐世药剂]', desc: '饮用后短暂脱离物质位面，屏蔽所有实体的感知与恶意。持续 5 秒。', color: 'cyan' },
+    'hourglass': { name: '遗容碎片 [时光沙漏]', desc: '碾碎它以扭曲局部时间流速，使下一次属性重组不再需要时间读条，瞬间完成。', color: 'yellow' },
+    'straw_doll': { name: '受诅咒的扎草体 [厄运稻草人]', desc: '将其遗弃在当前房间作为陷阱。踏入此地的第一个实体将遭到恐怖诅咒，其所有属性被强制削减 50%。', color: 'purple' }
+  };
+
+  return (
+    <div className="absolute inset-0 z-[120] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" />
+      
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="relative z-10 w-full max-w-4xl bg-[#0a0f14] border border-cyan-900/40 shadow-[0_0_50px_rgba(0,150,200,0.15)] overflow-hidden flex flex-col max-h-[85vh]"
+      >
+        <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#00ffff,transparent)] opacity-50" />
+        <div className="px-6 py-4 border-b border-cyan-900/30 flex justify-between items-center bg-black/60">
+          <span className="text-[14px] uppercase tracking-[0.3em] font-bold text-cyan-700/80">Void Repository</span>
+          <span className="text-[11px] font-mono tracking-widest text-cyan-500/60 animate-pulse">
+            {'>>> INVENTORY_ACCESS'}
+          </span>
+        </div>
+
+        <div className="p-6 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 bg-[#05080a]">
+          {Object.keys(itemCounts).length === 0 ? (
+            <div className="flex-1 flex items-center justify-center min-h-[300px]">
+              <span className="text-cyan-900/50 text-[14px] tracking-widest uppercase italic">空无一物... (Empty)</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(itemCounts).map(([itemKey, count]) => {
+                const item = itemKey as ItemType;
+                const details = itemDetails[item];
+                if (!details) return null;
+                
+                return (
+                  <div key={item} className={`border border-${details.color}-900/30 bg-black/40 p-4 flex flex-col gap-3 group hover:border-${details.color}-700/50 transition-colors`}>
+                    <div className="flex justify-between items-start border-b border-[#1a2f3a] pb-2">
+                      <span className={`text-${details.color}-500 font-bold tracking-wide text-[14px]`}>{details.name}</span>
+                      <span className={`text-${details.color}-400/80 font-mono text-[12px] bg-${details.color}-950/30 px-2 py-0.5 rounded-sm border border-${details.color}-900/30`}>x{count}</span>
+                    </div>
+                    <div className="text-[12px] text-[#8a9fae] leading-relaxed text-justify min-h-[60px]">
+                      {details.desc}
+                    </div>
+                    <div className="mt-auto pt-2">
+                      <button
+                        onClick={() => handleUseItem(item)}
+                        className={`w-full py-2 bg-${details.color}-950/20 border border-${details.color}-900/50 text-${details.color}-500/80 hover:bg-${details.color}-900/40 hover:text-${details.color}-400 hover:border-${details.color}-600 uppercase text-[12px] tracking-widest font-bold transition-all`}
+                      >
+                        [ 提取并使用 ]
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-black/80 border-t border-cyan-900/30 flex justify-center">
+          <button
+            onClick={() => { s.status = 'playing'; forceRender(); }}
+            className="w-full max-w-[200px] bg-transparent border border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300 py-3 text-[12px] uppercase font-bold tracking-[0.2em] transition-all cursor-pointer"
+          >
+            [ 关闭屏障 ]
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 const ShopOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
   const s = stateRef.current;
@@ -1845,15 +1967,15 @@ const ShopOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObje
             <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 痛觉隔绝注射 (耐力)</span>
             <span className="text-[#d4c3b5]">10 🪙</span>
           </button>
-          <button onClick={() => handleBuy('时光沙漏', 20, () => { s.inventory.push('Hourglass'); addLog(s, '📦 获得了[时光沙漏]，可以直接瞬间重组属性。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+          <button onClick={() => handleBuy('时光沙漏', 20, () => { s.inventory.push('hourglass'); addLog(s, '📦 获得了[时光沙漏]，可以直接瞬间重组属性。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
             <span className="text-yellow-600 font-bold group-hover:text-yellow-400 transition">遗容碎片 [时光沙漏]</span>
             <span className="text-[#d4c3b5]">20 🪙</span>
           </button>
-          <button onClick={() => handleBuy('隐世药剂', 20, () => { s.inventory.push('EtherPotion'); addLog(s, '📦 获得了[隐世药剂]，使用后隐身30秒避开灾厄。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+          <button onClick={() => handleBuy('隐世药剂', 20, () => { s.inventory.push('ether_potion'); addLog(s, '📦 获得了[隐世药剂]，使用后隐身30秒避开灾厄。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
             <span className="text-cyan-600 font-bold group-hover:text-cyan-400 transition">深渊浓缩液 [隐世药剂]</span>
             <span className="text-[#d4c3b5]">20 🪙</span>
           </button>
-          <button onClick={() => handleBuy('厄运稻草人', 30, () => { s.inventory.push('StrawDoll'); addLog(s, '📦 获得了极度危险的[厄运稻草人]。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 30} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 30) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+          <button onClick={() => handleBuy('厄运稻草人', 30, () => { s.inventory.push('straw_doll'); addLog(s, '📦 获得了极度危险的[厄运稻草人]。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 30} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 30) ? 'opacity-30 cursor-not-allowed' : ''}`}>
             <span className="text-purple-600 font-bold group-hover:text-purple-400 transition">受诅咒的扎草体 [厄运稻草人]</span>
             <span className="text-[#d4c3b5]">30 🪙</span>
           </button>
@@ -2993,6 +3115,7 @@ export default function App() {
           <MapPanel stateRef={stateRef} handlePlayerMove={handlePlayerMove} startReading={startReading} startDivination={startDivination} />
         </main>
 
+        <InventoryOverlay stateRef={stateRef} forceRender={forceRender} />
         <ShopOverlay stateRef={stateRef} forceRender={forceRender} />
         <ShopIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <PassageIntroOverlay stateRef={stateRef} forceRender={forceRender} />
