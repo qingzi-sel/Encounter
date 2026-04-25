@@ -180,143 +180,143 @@ interface RoomDef {
 }
 
 const ROOMS: Record<RoomId, RoomDef> = {
-  LivingRoom: { 
-    id: 'LivingRoom', 
-    name: '起居室', 
-    attrs: ['stamina', 'focus'], 
+  LivingRoom: {
+    id: 'LivingRoom',
+    name: '起居室',
+    attrs: ['stamina', 'focus'],
     adj: ['GreatHall', 'Yard', 'DressingRoom', 'GuestQuarters', 'Kitchen'],
     desc: '褪色的挂毯在无风的室内微微晃动，织物上的图案似乎正在缓慢变形。空气中浮动着一种类似腐烂花粉的甜腻气味，引诱着疲惫的头脑陷入永眠。'
   },
-  GreatHall: { 
-    id: 'GreatHall', 
-    name: '大礼堂', 
-    attrs: ['strength', 'intelligence', 'focus'], 
+  GreatHall: {
+    id: 'GreatHall',
+    name: '大礼堂',
+    attrs: ['strength', 'intelligence', 'focus'],
     adj: ['LivingRoom', 'ThroneRoom', 'LordsChamber', 'GrandLibrary'],
     desc: '空旷的长桌上整齐地摆放着空空如也的银餐具。高耸的天花板隐没在黑暗中，仿佛那里悬浮着一个看不见的胃囊，正静静俯瞰着闯入者。'
   },
-  ThroneRoom: { 
-    id: 'ThroneRoom', 
-    name: '王座大厅', 
-    attrs: ['stamina', 'strength', 'patience', 'intelligence'], 
+  ThroneRoom: {
+    id: 'ThroneRoom',
+    name: '王座大厅',
+    attrs: ['stamina', 'strength', 'patience', 'intelligence'],
     adj: ['GreatHall'],
     desc: '黄金与宝石在血色的余晖中黯淡无光。沉重的王座上并没有人，但当你凝视它时，总会感觉到一种强烈的、想要下跪并挖出自己双眼的冲动。'
   },
-  LordsChamber: { 
-    id: 'LordsChamber', 
-    name: '领主卧房', 
-    attrs: ['intelligence', 'patience'], 
+  LordsChamber: {
+    id: 'LordsChamber',
+    name: '领主卧房',
+    attrs: ['intelligence', 'patience'],
     adj: ['GreatHall', 'BellTower'],
     desc: '床幔后传来了极其细微、带有节奏的粘稠咀嚼声。这里的每一个阴影似乎都比外界要沉重数倍，几乎要将地板压塌。'
   },
-  GrandLibrary: { 
-    id: 'GrandLibrary', 
-    name: '大图书馆', 
-    attrs: ['intelligence'], 
+  GrandLibrary: {
+    id: 'GrandLibrary',
+    name: '大图书馆',
+    attrs: ['intelligence'],
     adj: ['GreatHall', 'AlchemyLab'],
     desc: '书架上排列着无数用人皮装订的厚重书籍。当你路过时，书页会自发地翻动，发出如同无数个声音在同时低语的沙沙声。\n\n等等，在那些布满粘稠灰尘的古籍残卷之间，竟然挤着一本装帧极其违和、封皮甚至有些锃亮的《2026王道计算机考研计算机组成原理》。你好奇地随便翻开一页，那里的空白处被密密麻麻的红蓝水笔批注占领，页角卷边严重，还残留着几点干涸的咖啡渍。你读到一行字：“请简述程序，指令，微程序，微指令，微命令，微操作之间的关系”……这些文字不再跳动，而是透着一种比深渊更令人绝望的、属于异世界凡人的勤勉。这是一本真正的禁书。'
   },
-  Observatory: { 
-    id: 'Observatory', 
-    name: '占星塔', 
-    attrs: ['focus'], 
+  Observatory: {
+    id: 'Observatory',
+    name: '占星塔',
+    attrs: ['focus'],
     adj: ['AlchemyLab'],
     desc: '这里本应能看到星空，但望远镜的镜片里只映出一片令人作呕的、正在搏动的深紫色虚无。星辰的位置似乎在随着某种邪恶的意志而有规律地律动。'
   },
-  BellTower: { 
-    id: 'BellTower', 
-    name: '钟楼', 
-    attrs: ['patience', 'focus'], 
+  BellTower: {
+    id: 'BellTower',
+    name: '钟楼',
+    attrs: ['patience', 'focus'],
     adj: ['LordsChamber', 'ShadowCorridor'],
     desc: '巨大的钟绳在空中摇曳，如同上吊者的脚尖在寻找支点。每一次风吹过塔顶，都会带起一阵让人精神衰弱的次声波共鸣。'
   },
-  AlchemyLab: { 
-    id: 'AlchemyLab', 
-    name: '炼金室', 
-    attrs: ['intelligence', 'focus'], 
+  AlchemyLab: {
+    id: 'AlchemyLab',
+    name: '炼金室',
+    attrs: ['intelligence', 'focus'],
     adj: ['GrandLibrary', 'Observatory', 'GuestQuarters'],
     desc: '试管中沸腾着颜色异样的液体，偶尔会浮出一只带有复眼的胚胎。空气中充满了刺鼻的硫磺味，以及某种正在试图溶解你肺部的化学酸雾。'
   },
-  ShadowCorridor: { 
-    id: 'ShadowCorridor', 
-    name: '密道', 
-    attrs: ['stamina', 'patience'], 
+  ShadowCorridor: {
+    id: 'ShadowCorridor',
+    name: '密道',
+    attrs: ['stamina', 'patience'],
     adj: ['DressingRoom', 'BellTower', 'Greenhouse'],
     desc: '墙壁的石缝里渗出黑色的、带有温度的粘液。这里没有任何光线能照亮超过三步的范围，黑暗本身就像是有实体的流质，正试图钻入你的毛孔。'
   },
-  DressingRoom: { 
-    id: 'DressingRoom', 
-    name: '更衣室', 
-    attrs: [], 
+  DressingRoom: {
+    id: 'DressingRoom',
+    name: '更衣室',
+    attrs: [],
     adj: ['LivingRoom', 'ShadowCorridor', 'Chapel'],
     desc: '这里的镜子照出的并不是你的倒影，而是你内心深处最不愿面对的腐朽假象。唯有此处，那种时刻被窥视的压迫感会稍微减轻——但这或许只是深渊的诱饵。'
   },
-  GuestQuarters: { 
-    id: 'GuestQuarters', 
-    name: '贵宾室', 
-    attrs: ['stamina', 'focus'], 
+  GuestQuarters: {
+    id: 'GuestQuarters',
+    name: '贵宾室',
+    attrs: ['stamina', 'focus'],
     adj: ['LivingRoom', 'AlchemyLab', 'WineCellar'],
     desc: '考究的软榻已经发霉，空气中残留着昂贵香水与尸臭混合后的怪异气息。你总觉得床底下有东西在蠕动，但看过去时却只有空洞的阴影。'
   },
-  Greenhouse: { 
-    id: 'Greenhouse', 
-    name: '温室废园', 
-    attrs: ['strength', 'patience'], 
+  Greenhouse: {
+    id: 'Greenhouse',
+    name: '温室废园',
+    attrs: ['strength', 'patience'],
     adj: ['ShadowCorridor', 'Armory'],
     desc: '这里的植物有着半透明的、类似肉质的茎叶。它们不需要阳光，而是以空气中残留的绝望为食，偶尔会向路过者喷洒带有麻醉作用的孢子。'
   },
-  Chapel: { 
-    id: 'Chapel', 
-    name: '礼拜堂', 
-    attrs: ['patience', 'intelligence', 'focus'], 
+  Chapel: {
+    id: 'Chapel',
+    name: '礼拜堂',
+    attrs: ['patience', 'intelligence', 'focus'],
     adj: ['DressingRoom', 'Yard', 'Armory'],
     desc: '祭坛上供奉的并不是神像，而是一块形状不规则的黑色陨石。这里的祷告声变成了倒错的咒语，空气冷得能冻裂骨髓，却又带着某种神圣的疯狂感。'
   },
-  Yard: { 
-    id: 'Yard', 
-    name: '城门庭院', 
-    attrs: ['stamina', 'strength'], 
+  Yard: {
+    id: 'Yard',
+    name: '城门庭院',
+    attrs: ['stamina', 'strength'],
     adj: ['LivingRoom', 'MainGate', 'Chapel', 'Kitchen'],
-    desc: '枯萎的杂草间散落着无法辨认的石像残骸，它们的表情扭曲得超出了人类痛苦的极限。这里的空气中总弥漫着一股被雨水浸透的陈年灰烬味。'
+    desc: '枯萎的杂草间散落着无法辨认的石像残骸，它们的表情扭曲得超出了人类痛苦的极限。这里的空气中总弥漫着一股被雨水浸透的陈年灰烬味。\n\n在你准备转身离去时，一个极其微小的影子划过了视线的边缘。一只通体漆黑的野猫正蹲在石像断裂的颈项上，那对金色的竖瞳正死死地钉在你身上。刹那间，你的脑海中没来由地响起一个如同指甲划过陶罐的尖锐声音，那语调古怪得不像是人类所发出的：“猫儿食**，百日则肥白”……每当你试图辨认那两个被干扰的字符，它们就像是被某种无形的力量从现实中硬生生地抹去了，只留下两团正在不断腐蚀视网膜的混沌阴影。到底是什么……'
   },
-  Kitchen: { 
-    id: 'Kitchen', 
-    name: '厨房', 
-    attrs: ['focus'], 
+  Kitchen: {
+    id: 'Kitchen',
+    name: '厨房',
+    attrs: ['focus'],
     adj: ['LivingRoom', 'Yard', 'WineCellar'],
     desc: '巨大的铁锅里正炖煮着某些不可名状的软体组织。这里的屠宰刀即使没有人操作，也会偶尔发出清脆的撞击声，像是在渴望着新鲜的切口。'
   },
-  WineCellar: { 
-    id: 'WineCellar', 
-    name: '酒窖', 
-    attrs: ['stamina', 'patience'], 
+  WineCellar: {
+    id: 'WineCellar',
+    name: '酒窖',
+    attrs: ['stamina', 'patience'],
     adj: ['GuestQuarters', 'Kitchen', 'Dungeon'],
     desc: '沉重的木桶里装的并不是美酒，而是一种带有强烈诱幻性的、粘稠的黑色液体。空气中充满了发酵带来的酸味，以及某种正在木缝间生长的菌丝呼吸声。'
   },
-  Armory: { 
-    id: 'Armory', 
-    name: '军械库', 
-    attrs: ['strength', 'stamina'], 
+  Armory: {
+    id: 'Armory',
+    name: '军械库',
+    attrs: ['strength', 'stamina'],
     adj: ['Chapel', 'MainGate', 'Greenhouse'],
     desc: '这里的盔甲看起来不像是给人穿的，更像是用来禁锢某些变形实体的铁笼。武器的刃口上流转着异样的紫光，似乎在渴求着不属于这个世界的鲜血。'
   },
-  MainGate: { 
-    id: 'MainGate', 
-    name: '城堡大门', 
-    attrs: ['strength', 'patience'], 
+  MainGate: {
+    id: 'MainGate',
+    name: '城堡大门',
+    attrs: ['strength', 'patience'],
     adj: ['Yard', 'Armory', 'Watchtower'],
     desc: '沉重的铁门布满铁锈，像两排巨大的、缺损的牙齿，死死咬合在风中。门轴发出的吱呀声像是某种垂死者的哀鸣。'
   },
-  Watchtower: { 
-    id: 'Watchtower', 
-    name: '瞭望台', 
-    attrs: ['focus', 'intelligence'], 
+  Watchtower: {
+    id: 'Watchtower',
+    name: '瞭望台',
+    attrs: ['focus', 'intelligence'],
     adj: ['MainGate', 'Dungeon'],
     desc: '狂风在高台上呼啸，你可以俯瞰整个荒芜的城堡。然而，城堡外的世界并不是大地，而是一片翻涌着的、不断吞噬光线的灰色迷雾。'
   },
-  Dungeon: { 
-    id: 'Dungeon', 
-    name: '地牢', 
-    attrs: ['stamina', 'patience'], 
+  Dungeon: {
+    id: 'Dungeon',
+    name: '地牢',
+    attrs: ['stamina', 'patience'],
     adj: ['Watchtower', 'WineCellar'],
     desc: '锁链撞击石壁的声音在走廊里回荡。每一间牢房都像是一个深不见底的喉咙，从中传出的抓挠声和呜咽声已经持续了数个世纪。'
   },
@@ -471,8 +471,7 @@ interface GameState {
   logs: string[];
   showWarningTimer: number;
   showRoomDesc: boolean;
-  libraryEggPhase: number; // 0: hidden, 1: typing, 2: done
-  libraryEggProgress: number; 
+  roomEggStates: Record<string, { phase: number; progress: number }>; // phase 0: hidden, 1: typing, 2: done
 }
 
 // --- Logic Helpers ---
@@ -606,15 +605,14 @@ function getInitialGameState(): GameState {
     isFeedingBeast: false,
     glitchCycle: 60,
     showRoomDesc: false,
-    libraryEggPhase: 0,
-    libraryEggProgress: 0,
+    roomEggStates: {},
+    logs: ['[系统] 欢迎来到《Encounter 遭遇》。由于处于超重力区域，总属性上限受限，请先分配你的初始 20 点属性。'],
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
       { id: 1, color: '#2563eb', name: '深蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'Kitchen' },
       { id: 2, color: '#a855f7', name: '紫晶判官', loc: 'AlchemyLab', attrs: { stamina: 14, strength: 14, patience: 14, intelligence: 14, focus: 14 }, moveTimer: 0, nextMoveWait: 2.5, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GuestQuarters' },
       { id: 3, color: '#ef4444', name: '深红渊主', loc: 'ThroneRoom', attrs: { stamina: 20, strength: 20, patience: 20, intelligence: 20, focus: 20 }, moveTimer: 0, nextMoveWait: 2.8, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
     ],
-    logs: ['[系统] 欢迎来到《Encounter 遭遇》。由于处于超重力区域，总属性上限受限，请先分配你的初始 20 点属性。'],
   };
 }
 
@@ -2475,12 +2473,12 @@ const CorruptedText = ({ text, color, tick, stateRef }: { text: string, color: s
   // Use dynamic cycle from state or default to 60
   const cycle = stateRef?.current?.glitchCycle || 60;
   const glitchDuration = Math.max(10, Math.floor(cycle * 0.3)); // Glitch for 30% of the cycle, at least 0.2s
-  
+
   const currentCycleIndex = Math.floor(tick / cycle);
   const cycleProgress = tick % cycle;
-  
-  const isGlitching = tick < glitchDuration || cycleProgress < glitchDuration; 
-  
+
+  const isGlitching = tick < glitchDuration || cycleProgress < glitchDuration;
+
   let processedText = text;
   if (isGlitching) {
     const wordToCorruptIndex = currentCycleIndex % keys.length;
@@ -2772,46 +2770,57 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
   if (!s.showRoomDesc) return null;
   const room = ROOMS[s.playerLoc];
 
-  const isLibrary = String(s.playerLoc) === 'GrandLibrary';
   const fullText = room.desc || "";
   const parts = fullText.split('\n\n');
   const normalText = parts[0];
   const eggText = parts[1] || "";
+  const hasEggText = eggText.length > 0;
+
+  // 获取或初始化当前房间的状态
+  if (!s.roomEggStates[s.playerLoc]) {
+    s.roomEggStates[s.playerLoc] = { phase: 0, progress: 0 };
+  }
+  const roomState = s.roomEggStates[s.playerLoc];
 
   // Typewriter effect logic
   useEffect(() => {
-    if (isLibrary && s.libraryEggPhase === 1) {
+    if (hasEggText && roomState.phase === 1) {
       const timer = setInterval(() => {
-        if (s.libraryEggProgress < eggText.length) {
-          s.libraryEggProgress += 1;
+        if (roomState.progress < eggText.length) {
+          roomState.progress += 1;
           forceRender();
         } else {
-          s.libraryEggPhase = 2;
+          roomState.phase = 2;
           clearInterval(timer);
           forceRender();
         }
-      }, 40);
+      }, 30); // 稍微加快一点语感
       return () => clearInterval(timer);
     }
-  }, [isLibrary, s.libraryEggPhase, eggText.length]);
+  }, [hasEggText, roomState.phase, eggText.length, s.playerLoc]);
 
   const handleReturn = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (isLibrary && s.libraryEggPhase === 0) {
-      s.libraryEggPhase = 1;
-      s.libraryEggProgress = 0;
+    
+    // 如果有第二段文字且尚未触发，则点击后进入打字阶段
+    if (hasEggText && roomState.phase === 0) {
+      roomState.phase = 1;
+      roomState.progress = 0;
       forceRender();
       return;
     }
-    if (isLibrary && s.libraryEggPhase === 1) return;
+    
+    // 正在打字时不允许关闭（和大图书馆一致）
+    if (hasEggText && roomState.phase === 1) return;
+    
     s.showRoomDesc = false;
     forceRender();
   };
 
   return (
     <div className="absolute inset-0 z-[120] pointer-events-none flex items-center justify-center p-4">
-      <div 
-        className="absolute inset-0 bg-black/85 backdrop-blur-md pointer-events-auto" 
+      <div
+        className="absolute inset-0 bg-black/85 backdrop-blur-md pointer-events-auto"
         onClick={handleReturn}
       />
 
@@ -2821,12 +2830,12 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
         className="relative z-10 w-full max-w-2xl bg-[#0d0d0d] border border-[#222] shadow-[0_0_50px_rgba(0,0,0,1)] flex flex-col pointer-events-auto"
       >
         <div className="h-1 w-full bg-gradient-to-r from-transparent via-theme-cyan/40 to-transparent" />
-        
+
         <div className="px-6 py-3 border-b border-white/5 flex justify-between items-center bg-black/30">
           <span className="text-[11px] uppercase tracking-[0.3em] font-bold text-theme-text/50">Environmental Awareness</span>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-theme-cyan/60 animate-pulse">LOC: {room.id.toUpperCase()}</span>
-            <button 
+            <button
               onClick={handleReturn}
               className="text-theme-text/40 hover:text-white transition"
             >
@@ -2849,46 +2858,46 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
             </p>
 
             {/* Easter Egg Part - Dynamic */}
-            {isLibrary && (s.libraryEggPhase >= 1) && (
-              <p className="mt-6 indent-8 text-theme-cyan/90">
-                <CorruptedText 
-                  text={eggText.slice(0, s.libraryEggProgress)} 
-                  color="white" 
-                  tick={tick + 50} 
-                  stateRef={stateRef} 
+            {/* Easter Egg Part - Dynamic Typewriter */}
+            {hasEggText && roomState.phase >= 1 && (
+              <p className="mt-6 indent-8 text-theme-cyan/90 border-l-2 border-theme-cyan/20 pl-4 bg-theme-cyan/5 py-4 italic">
+                <CorruptedText
+                  text={eggText.slice(0, roomState.progress)}
+                  color="cyan"
+                  tick={tick + 50}
+                  stateRef={stateRef}
                 />
-                {s.libraryEggPhase === 1 && <span className="inline-block w-2 h-4 bg-theme-cyan ml-1 animate-pulse" />}
+                {roomState.phase === 1 && <span className="inline-block w-2 h-4 bg-theme-cyan ml-1 animate-pulse" />}
               </p>
             )}
 
-            {!isLibrary && room.desc.split('\n\n').slice(1).map((p, i) => (
-               <p key={i} className="mt-4 indent-8">
-                  <CorruptedText text={p} color="white" tick={tick + i * 20} stateRef={stateRef} />
-               </p>
+            {!hasEggText && room.desc.split('\n\n').slice(1).map((p, i) => (
+              <p key={i} className="mt-4 indent-8">
+                <CorruptedText text={p} color="white" tick={tick + i * 20} stateRef={stateRef} />
+              </p>
             ))}
           </div>
-          
+
           <div className="mt-10 flex justify-center">
             <button
               onClick={handleReturn}
-              className={`px-10 py-2 border transition-all uppercase text-[11px] tracking-[4px] font-bold ${
-                isLibrary && s.libraryEggPhase === 1 
-                  ? 'border-gray-800 text-gray-600 cursor-not-allowed' 
-                  : 'border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan'
-              }`}
-              disabled={isLibrary && s.libraryEggPhase === 1}
+              className={`px-10 py-2 border transition-all uppercase text-[11px] tracking-[4px] font-bold ${hasEggText && roomState.phase === 1
+                ? 'border-gray-800 text-gray-600 cursor-not-allowed'
+                : 'border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan'
+                }`}
+              disabled={hasEggText && roomState.phase === 1}
             >
-              {isLibrary && s.libraryEggPhase === 0 
-                ? '[ 闭目冥思 ] 返回现实' 
-                : isLibrary && s.libraryEggPhase === 1
-                ? '…… 等等，那是？'
-                : isLibrary && s.libraryEggPhase === 2
-                ? '[ 颤抖 ] 离开这里'
-                : '[ 闭目冥思 ] 返回现实'}
+              {hasEggText && roomState.phase === 0
+                ? '[ 闭目冥思 ] 返回现实'
+                : hasEggText && roomState.phase === 1
+                  ? '…… 等等，那是？'
+                  : hasEggText && roomState.phase === 2
+                    ? '[ 颤抖 ] 离开这里'
+                    : '[ 闭目冥思 ] 返回现实'}
             </button>
           </div>
         </div>
-        
+
         <div className="absolute bottom-2 right-4 text-[9px] font-mono text-white/10 uppercase tracking-widest pointer-events-none">
           DeepMind // Eldritch Engine 1.0
         </div>
@@ -2911,6 +2920,9 @@ const FAILURE_TEXTS: Record<string, string> = {
   '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
 };
 
+// --- Global Logic Control ---
+let globalLoopId = 0;
+
 export default function App() {
   const stateRef = useRef<GameState>(getInitialGameState());
   const [renderTick, setRenderTick] = useState(0);
@@ -2923,18 +2935,33 @@ export default function App() {
     let lastTime = performance.now();
     let renderTimer = 0;
 
+    const myLoopId = ++globalLoopId;
+
     const loop = (time: number) => {
+      // 幽灵循环拦截：如果当前循环 ID 不是全局最新的，说明是 HMR 遗留的旧循环，直接终结
+      if (myLoopId !== globalLoopId) return;
+
+      const s = stateRef.current;
+      const isPaused = s.showRoomDesc || s.lookoutMode || 
+                       ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status);
+
+      if (isPaused) {
+        lastTime = time;
+        frameId = requestAnimationFrame(loop);
+        return;
+      }
+
       const dt = (time - lastTime) / 1000;
       lastTime = time;
 
-      updateGame(stateRef.current, dt);
+      updateGame(s, dt);
 
-      // Throttle UI updates to ~50fps to reduce React overhead
       renderTimer += dt;
       if (renderTimer >= 0.02) {
         setRenderTick(t => t + 1);
         renderTimer = 0;
       }
+      
       frameId = requestAnimationFrame(loop);
     };
 
@@ -2966,7 +2993,9 @@ export default function App() {
 
   // --- Realtime Game Loop Update ---
   const updateGame = (state: GameState, dt: number) => {
-    if (state.status === 'gameover') return;
+    // 双重保护：如果处于暂停状态，直接跳过逻辑更新
+    if (state.showRoomDesc || state.lookoutMode || state.status === 'gameover') return;
+    if (['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(state.status)) return;
 
     // --- Global Timers (Moved to top for safety) ---
     if (state.showWarningTimer > 0) state.showWarningTimer = Math.max(0, state.showWarningTimer - dt);
@@ -3739,6 +3768,11 @@ export default function App() {
           <div className="text-[18px] sm:text-[24px] font-bold tracking-[2px] sm:tracking-[4px] text-theme-cyan uppercase">
             ENCOUNTER
           </div>
+          {(s.showRoomDesc || s.lookoutMode || ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status)) && (
+            <div className="flex bg-yellow-900/50 border border-yellow-500 text-yellow-500 text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_rgba(234,179,8,0.3)_inset]">
+              ⏳ 时间静止 (TIME FROZEN)
+            </div>
+          )}
           {s.invisibilityTimer > 0 && (
             <div className="flex bg-cyan-900/50 border border-theme-cyan text-theme-cyan text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_var(--color-theme-cyan)_inset]">
               ✨ 虚无状态 (隐身) {Math.ceil(s.invisibilityTimer)}s
@@ -3767,7 +3801,7 @@ export default function App() {
               onChange={(e) => {
                 const diff = e.target.value as any;
                 s.difficulty = diff;
-                
+
                 // Difficulty Logic
                 if (diff === 'easy') {
                   s.debugInfiniteSatiety = true;
@@ -4026,16 +4060,16 @@ export default function App() {
                   />
                   绝对封印 (强制怪物回笼)
                 </label>
-                
+
                 <div className="w-full flex flex-col gap-1 border-t border-blue-500/30 pt-2 mt-1">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-blue-300 uppercase font-bold tracking-widest">文本污染频率 (低 → 高)</span>
                     <span className="text-[10px] font-mono text-white bg-blue-900/50 px-1">{(1.0 / (s.glitchCycle * 0.02)).toFixed(1)} Hz</span>
                   </div>
-                  <input 
-                    type="range" 
-                    min="20" 
-                    max="500" 
+                  <input
+                    type="range"
+                    min="20"
+                    max="500"
                     step="10"
                     value={s.glitchCycle}
                     onChange={(e) => {
