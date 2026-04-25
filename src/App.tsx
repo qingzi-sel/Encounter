@@ -454,8 +454,9 @@ function getInitialGameState(): GameState {
 }
 
 const addLog = (state: GameState, msg: string) => {
-  state.logs.push(`[${new Date().toLocaleTimeString('en-US', { hour12: false })}] ${msg}`);
-  if (state.logs.length > 50) state.logs.shift();
+  const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false });
+  const newLog = `[${timeStr}] ${msg}`;
+  state.logs = [...state.logs, newLog].slice(-100);
 };
 
 // --- Subcomponents ---
@@ -808,6 +809,14 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
     }
   }
 
+  const npcsByRoom = s.npcs.reduce((acc, n) => {
+    if (!n.isDead) {
+      if (!acc[n.loc]) acc[n.loc] = [];
+      acc[n.loc].push(n);
+    }
+    return acc;
+  }, {} as Record<string, typeof s.npcs[0][]>);
+
   let chaseCamCoord = { x: 0, y: 0 };
   if (s.status === 'chasing' && s.chaseData) {
     chaseCamCoord = getChaseCoord(s.chaseData.playerRooms, !!s.chaseData.isUpPath, !!s.chaseData.inSafeRoom);
@@ -910,8 +919,8 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 const thicc = s.greenMidnight.hitCooldown > 0 ? 12 : 5;
                 return (
                   <g transform={`rotate(${s.greenMidnight.angle}, ${oX}, ${oY})`} className={s.greenMidnight.hitCooldown > 0 ? 'animate-pulse' : ''}>
-                    <line x1={oX - length} y1={oY} x2={oX + length} y2={oY} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)" />
-                    <line x1={oX} y1={oY - length} x2={oX} y2={oY + length} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} filter="drop-shadow(0 0 10px #22c55e)" />
+                    <line x1={oX - length} y1={oY} x2={oX + length} y2={oY} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} style={{ filter: 'blur(2px)' }} />
+                    <line x1={oX} y1={oY - length} x2={oX} y2={oY + length} stroke="#22c55e" strokeWidth={thicc} opacity={0.8} style={{ filter: 'blur(2px)' }} />
                     <circle cx={oX} cy={oY} r={16} fill="#000" stroke="#22c55e" strokeWidth={3} />
                     <circle cx={oX} cy={oY} r={6} fill="#22c55e" className="animate-ping" />
                   </g>
@@ -945,7 +954,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                             markerEnd="url(#npc-arrowhead-top)"
                             className="animate-[pulse_2.1s_infinite]"
                             opacity="0.5"
-                            style={{ filter: `drop-shadow(0 0 4px ${n.color})` }}
+                            style={{ filter: 'blur(1px)' }}
                           >
                             <animate attributeName="stroke-dashoffset" from="40" to="0" dur="4s" repeatCount="indefinite" />
                           </line>
@@ -966,7 +975,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                           markerEnd="url(#beast-arrowhead-top)"
                           className="animate-[pulse_1.6s_infinite]"
                           opacity="0.6"
-                          style={{ filter: 'drop-shadow(0 0 6px purple)' }}
+                          style={{ filter: 'blur(1px)' }}
                         >
                           <animate attributeName="stroke-dashoffset" from="40" to="0" dur="3s" repeatCount="indefinite" />
                         </line>
@@ -1072,7 +1081,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
               const layout = ROOM_LAYOUT[r.id];
               const isCurrent = s.playerLoc === r.id;
               const isAdj = ROOMS[s.playerLoc].adj.includes(r.id);
-              const npcsInR = s.npcs.filter(n => !n.isDead && n.loc === r.id);
+              const npcsInR = npcsByRoom[r.id] || [];
               const isBeast = s.beast.state === 'escaped' && s.beast.loc === r.id;
 
               let boxCls = "border-theme-border/30 text-[#8b949e]";
@@ -1111,7 +1120,6 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                           borderLeft: '4px solid transparent',
                           borderRight: '4px solid transparent',
                           borderBottom: `8px solid ${n.color}`,
-                          filter: `drop-shadow(0 0 5px ${n.color})`
                         }} className="animate-pulse" title={n.name} />
                         {s.debugShowIntentions && (
                           <span className="text-[8px] font-bold leading-none" style={{ color: n.color }}>
@@ -1157,10 +1165,10 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                         zIndex: 30
                       }}
                     >
-                      <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping shadow-[0_0_80px_red]" />
+                      <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping" />
                       <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">{label}</span>
                       {isCharging && (
-                         <span className="absolute -top-[35px] -right-[15px] text-red-500 font-bold text-[24px] animate-bounce" style={{textShadow: '0 0 10px red'}}>!</span>
+                         <span className="absolute -top-[35px] -right-[15px] text-red-500 font-bold text-[24px] animate-bounce">!</span>
                       )}
                     </div>
                   );
@@ -1469,7 +1477,7 @@ const LogsPanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameState> }
       </div>
 
       <div className="pr-1 text-[12px] leading-[1.6] text-[#8b949e]">
-        {s.logs.map((log, idx) => {
+        {s.logs.slice(-100).map((log, idx) => {
           const isDanger = log.includes('⚔️') || log.includes('💀') || log.includes('🔴');
           const isCombatSystem = log.includes('警告') || log.includes('遭遇战');
           let colorCls = "border-theme-border";
@@ -1914,6 +1922,58 @@ const WarningOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameSta
 
 // --- Main App Component ---
 
+const ENCOUNTER_TEXTS: Record<string, string> = {
+  'white': "房间的温度毫无征兆地坠入了冰点。在微弱的光影交错间，一团苍白的雾气悄然凝聚成了模糊的三角锥形。它没有实体，没有动作，只有一个不断剥落又重组的虚假轮廓。仅仅是待在它附近，身上的热量就在被无声地抽走。相比觅食，它更像是一个迷失在高维度的悲哀残像，正试图将靠近的生者一同拖入死寂。",
+  '#ADD8E6': "伴随着一阵微弱却刺耳的电流高频嗡鸣，一个泛着淡蓝色冷光的几何构造体从半空中切割而出。它的棱角异常锐利，表面流转着扫描仪般的幽光。它像一台执行抹除程序的机器般悬浮了一瞬。紧接着，湛蓝的锁定光线交织成网，周围的空气仿佛被封死在真空罐里。",
+  '#a855f7': "极其强烈的精神撕裂感袭来，一尊散发着紫黑色微光的晶体凭空碾碎了前方的空间。当它悬浮在半空时，巨大且异样的引力场几乎要压断脊骨。处决式审判，已经降临。",
+  '#ef4444': "视线所及之处，一切都被染成了作呕铁锈味的血色。那是一个正在空间中剧烈搏动的深红多面体，像是在吞咽着这片维度。目光交汇的瞬间，心脏泵血完全失控，仿佛深渊本身正向你敞开怀抱。"
+};
+
+const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
+  'white': {
+    stamina: "幽影化作不可见的刺骨寒流席卷了{room}，你死死咬紧牙关，在极度低温中强行维持心脏跳动。",
+    strength: "苍白的虚影骤然膨胀狠狠撞来，你借助{room}内掩体死死撑住，对抗着那股试图将你推离当前维度的阴冷排斥力。",
+    patience: "怪物在{room}的阴暗处闪烁试图耗尽理智；你在死寂中默默倒数，等待它露出破绽的零点一秒。",
+    intelligence: "幽影扭曲了{room}的物理结构，你凭借记忆中的几何坐标进行心算，在倒错的瞬间找到唯一的平衡点躲过绞杀。",
+    focus: "整个{room}充斥着灵魂折损残音与雪花，你强忍眩晕，将视线死死钉在几何体核心唯一的实体上。"
+  },
+  '#ADD8E6': {
+    stamina: "巡卫释放的高压电弧封锁了{room}出路，在电网中，你依靠极限的肌肉拉扯翻滚闪避。",
+    strength: "合金构造体雷霆万钧地砸碎了{room}地板，你举起沉重杂物与这无情的机械生硬硬撼。",
+    patience: "蓝光在{room}扫掠；你蜷缩在死角犹如雕塑般纹丝不动，与它在毫秒间隐蔽博弈。",
+    intelligence: "光束折射暴露出致命运算逻辑，你在{room}穿梭并疯狂预判它的下一步封锁。",
+    focus: "在{room}致盲闪光中，你强忍刺痛，凝神捕捉悬浮引擎发出的微末气流声以定位。"
+  },
+  '#a855f7': {
+    stamina: "引力波将{room}气压翻倍，你顶着脏器破裂痛苦在极度缺氧的重压下艰难拉锯。",
+    strength: "紫晶凝结晶簇刺向要害，你怒吼挥舞武器在{room}中将晶壁生生砸碎。",
+    patience: "仿佛带污染的低语刺入脑海试图在{room}中同化你；你死死守着精神的最底层防线。",
+    intelligence: "判官正折叠{room}的维度，你强行用抽象拓扑学解析并拆解了它的引力囚笼。",
+    focus: "{room}被折射出数百重紫色幻象发起精神冲击，你专注过滤干扰，一击斩向本体的缝隙。"
+  },
+  '#ef4444': {
+    stamina: "猩红血雾灌满了{room}每一个角落，每一次呼吸都如同吞咽灼热碎玻璃，你硬抗剥离。",
+    strength: "血色多面体横扫了{room}，你在绝境中榨干爆发力，从正面硬生生扛下毁天灭地的一击。",
+    patience: "在被血色吞没的{room}里，你死压想要尖叫逃走的本能，静滞在血泊中等待时机。",
+    intelligence: "渊主无视{room}法则进行因果律抹杀，你榨干脑细胞在多维时间线上勉强推演生路。",
+    focus: "深红威压让{room}的光线扭曲，即使双眼逼出鲜血你也一刻不敢将感知从深渊中心移开半寸。"
+  }
+};
+
+const SUCCESS_TEXTS: Record<string, string> = {
+  'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
+  '#ADD8E6': "伴随着机能过载火花，巡卫的外壳出现裂纹。你趁着死机空档抽走了少量能源。",
+  '#a855f7': "傲慢宣告戛然而止，引力囚笼崩塌。你抓住跌落间隙强行掠夺了部分法则。",
+  '#ef4444': "猩红的怒涛竟被硬生生逼退，血色翻涌间你逆流而上，野蛮撕下并吞噬了它的权柄。"
+};
+
+const FAILURE_TEXTS: Record<string, string> = {
+  'white': "彻骨阴寒穿透长空，轮廓在视觉中放大，带走了体温的同时也抽走了你的部分核心维系。",
+  '#ADD8E6': "在物理锁定下，冷酷的裁决光束无情削去了你的一部分能力基盘。",
+  '#a855f7': "如同实质的紫色重压将你摁在地上，你的高维潜能被审判官强行抽出、剥夺。",
+  '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
+};
+
 export default function App() {
   const stateRef = useRef<GameState>(getInitialGameState());
   const [renderTick, setRenderTick] = useState(0);
@@ -1924,6 +1984,7 @@ export default function App() {
   useEffect(() => {
     let frameId: number;
     let lastTime = performance.now();
+    let renderTimer = 0;
 
     const loop = (time: number) => {
       const dt = (time - lastTime) / 1000;
@@ -1931,8 +1992,12 @@ export default function App() {
 
       updateGame(stateRef.current, dt);
 
-      // We throttle UI updates slightly or just rely on RAF. Let's rely on RAF.
-      setRenderTick(t => t + 1);
+      // Throttle UI updates to ~50fps to reduce React overhead
+      renderTimer += dt;
+      if (renderTimer >= 0.02) {
+        setRenderTick(t => t + 1);
+        renderTimer = 0;
+      }
       frameId = requestAnimationFrame(loop);
     };
 
@@ -2454,57 +2519,6 @@ export default function App() {
   };
 
 
-  const ENCOUNTER_TEXTS: Record<string, string> = {
-    'white': "房间的温度毫无征兆地坠入了冰点。在微弱的光影交错间，一团苍白的雾气悄然凝聚成了模糊的三角锥形。它没有实体，没有动作，只有一个不断剥落又重组的虚假轮廓。仅仅是待在它附近，身上的热量就在被无声地抽走。相比觅食，它更像是一个迷失在高维度的悲哀残像，正试图将靠近的生者一同拖入死寂。",
-    '#ADD8E6': "伴随着一阵微弱却刺耳的电流高频嗡鸣，一个泛着淡蓝色冷光的几何构造体从半空中切割而出。它的棱角异常锐利，表面流转着扫描仪般的幽光。它像一台执行抹除程序的机器般悬浮了一瞬。紧接着，湛蓝的锁定光线交织成网，周围的空气仿佛被封死在真空罐里。",
-    '#a855f7': "极其强烈的精神撕裂感袭来，一尊散发着紫黑色微光的晶体凭空碾碎了前方的空间。当它悬浮在半空时，巨大且异样的引力场几乎要压断脊骨。处决式审判，已经降临。",
-    '#ef4444': "视线所及之处，一切都被染成了作呕铁锈味的血色。那是一个正在空间中剧烈搏动的深红多面体，像是在吞咽着这片维度。目光交汇的瞬间，心脏泵血完全失控，仿佛深渊本身正向你敞开怀抱。"
-  };
-
-  const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
-    'white': {
-      stamina: "幽影化作不可见的刺骨寒流席卷了{room}，你死死咬紧牙关，在极度低温中强行维持心脏跳动。",
-      strength: "苍白的虚影骤然膨胀狠狠撞来，你借助{room}内掩体死死撑住，对抗着那股试图将你推离当前维度的阴冷排斥力。",
-      patience: "怪物在{room}的阴暗处闪烁试图耗尽理智；你在死寂中默默倒数，等待它露出破绽的零点一秒。",
-      intelligence: "幽影扭曲了{room}的物理结构，你凭借记忆中的几何坐标进行心算，在倒错的瞬间找到唯一的平衡点躲过绞杀。",
-      focus: "整个{room}充斥着灵魂折损残音与雪花，你强忍眩晕，将视线死死钉在几何体核心唯一的实体上。"
-    },
-    '#ADD8E6': {
-      stamina: "巡卫释放的高压电弧封锁了{room}出路，在电网中，你依靠极限的肌肉拉扯翻滚闪避。",
-      strength: "合金构造体雷霆万钧地砸碎了{room}地板，你举起沉重杂物与这无情的机械生硬硬撼。",
-      patience: "蓝光在{room}扫掠；你蜷缩在死角犹如雕塑般纹丝不动，与它在毫秒间隐蔽博弈。",
-      intelligence: "光束折射暴露出致命运算逻辑，你在{room}穿梭并疯狂预判它的下一步封锁。",
-      focus: "在{room}致盲闪光中，你强忍刺痛，凝神捕捉悬浮引擎发出的微末气流声以定位。"
-    },
-    '#a855f7': {
-      stamina: "引力波将{room}气压翻倍，你顶着脏器破裂痛苦在极度缺氧的重压下艰难拉锯。",
-      strength: "紫晶凝结晶簇刺向要害，你怒吼挥舞武器在{room}中将晶壁生生砸碎。",
-      patience: "仿佛带污染的低语刺入脑海试图在{room}中同化你；你死死守着精神的最底层防线。",
-      intelligence: "判官正折叠{room}的维度，你强行用抽象拓扑学解析并拆解了它的引力囚笼。",
-      focus: "{room}被折射出数百重紫色幻象发起精神冲击，你专注过滤干扰，一击斩向本体的缝隙。"
-    },
-    '#ef4444': {
-      stamina: "猩红血雾灌满了{room}每一个角落，每一次呼吸都如同吞咽灼热碎玻璃，你硬抗剥离。",
-      strength: "血色多面体横扫了{room}，你在绝境中榨干爆发力，从正面硬生生扛下毁天灭地的一击。",
-      patience: "在被血色吞没的{room}里，你死压想要尖叫逃走的本能，静滞在血泊中等待时机。",
-      intelligence: "渊主无视{room}法则进行因果律抹杀，你榨干脑细胞在多维时间线上勉强推演生路。",
-      focus: "深红威压让{room}的光线扭曲，即使双眼逼出鲜血你也一刻不敢将感知从深渊中心移开半寸。"
-    }
-  };
-
-  const SUCCESS_TEXTS: Record<string, string> = {
-    'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
-    '#ADD8E6': "伴随着机能过载火花，巡卫的外壳出现裂纹。你趁着死机空档抽走了少量能源。",
-    '#a855f7': "傲慢宣告戛然而止，引力囚笼崩塌。你抓住跌落间隙强行掠夺了部分法则。",
-    '#ef4444': "猩红的怒涛竟被硬生生逼退，血色翻涌间你逆流而上，野蛮撕下并吞噬了它的权柄。"
-  };
-
-  const FAILURE_TEXTS: Record<string, string> = {
-    'white': "彻骨阴寒穿透长空，轮廓在视觉中放大，带走了体温的同时也抽走了你的部分核心维系。",
-    '#ADD8E6': "在物理锁定下，冷酷的裁决光束无情削去了你的一部分能力基盘。",
-    '#a855f7': "如同实质的紫色重压将你摁在地上，你的高维潜能被审判官强行抽出、剥夺。",
-    '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
-  };
 
 
   const playDiceSound = () => {
