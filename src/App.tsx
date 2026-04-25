@@ -201,6 +201,23 @@ const ROOMS: Record<RoomId, RoomDef> = {
   Dungeon: { id: 'Dungeon', name: '地牢', attrs: ['stamina', 'patience'], adj: ['Watchtower', 'WineCellar'] },
 };
 
+const DIST_TO_BELL_TOWER: Partial<Record<RoomId, number>> = {};
+const computeDistToBellTower = () => {
+  if (Object.keys(DIST_TO_BELL_TOWER).length > 0) return;
+  const queue: { id: RoomId, dist: number }[] = [{ id: 'BellTower', dist: 0 }];
+  const visited = new Set<RoomId>();
+  while (queue.length > 0) {
+    const { id, dist } = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    DIST_TO_BELL_TOWER[id] = dist;
+    ROOMS[id].adj.forEach(adj => {
+      if (!visited.has(adj)) queue.push({ id: adj, dist: dist + 1 });
+    });
+  }
+};
+computeDistToBellTower();
+
 type Attributes = Record<AttrType, number>;
 
 
@@ -281,7 +298,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro' | 'passage_intro' | 'passage_victory' | 'passage_failure' | 'inventory';
+  status: 'playing' | 'gameover' | 'reading' | 'divination' | 'combat' | 'shop_intro' | 'shop' | 'passage_intro' | 'passage_failure' | 'passage_victory' | 'inventory' | 'belltower_intro' | 'belltower_rung';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -294,6 +311,8 @@ interface GameState {
   instantReallocActive: boolean;
   traps: RoomId[];
   trappedTimer: number;
+  bellCooldownTimer: number;
+  bellAttractTimer: number;
   debugInfiniteInvisibility?: boolean;
   debugInvincibleCombat?: boolean;
   debugInfiniteSatiety?: boolean;
@@ -431,6 +450,8 @@ function getInitialGameState(): GameState {
     instantReallocActive: false,
     traps: [],
     trappedTimer: 0,
+    bellCooldownTimer: 0,
+    bellAttractTimer: 0,
     debugInfiniteInvisibility: false,
     debugInfiniteCoins: false,
     rustedCoins: 0,
@@ -572,6 +593,8 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
 
   return (
     <React.Fragment>
+
+
       <div className="text-[12px] text-theme-cyan uppercase border-b border-theme-border pb-1 mb-3">
         神经重组 [属性分配]
       </div>
@@ -1365,6 +1388,23 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
             </div>
           )}
 
+          {room.id === 'BellTower' && (
+            <div className="flex flex-col gap-2 p-3 bg-[#110a14] border border-[#4a2a55] shadow-[0_0_15px_rgba(128,0,128,0.1)]">
+              <div className="text-[10px] text-purple-400 font-bold uppercase text-center border-b border-purple-900/50 pb-1 mb-1 tracking-[2px]">
+                骸骨巨钟
+              </div>
+              <button
+                onClick={() => {
+                  s.status = 'belltower_intro';
+                  forceRender();
+                }}
+                className="w-full h-[36px] text-[12px] border border-purple-600 text-purple-400 uppercase transition-all hover:bg-purple-600/20 hover:text-purple-300 cursor-pointer font-bold shadow-[0_0_10px_rgba(128,0,128,0.2)]"
+              >
+                [ 靠近钟楼 ] 窥视高塔
+              </button>
+            </div>
+          )}
+
           {room.id === 'Armory' && (
             <div className="flex flex-col gap-2 p-3 bg-[#0a0f0a] border border-[#1a2f1a]">
               <div className="text-[10px] text-[#a0c5a0] uppercase font-bold text-center border-b border-[#1a2f1a]/50 pb-1 mb-1">废弃的行刑架</div>
@@ -1641,7 +1681,131 @@ const ShopIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
   );
 };
 
+const BellTowerIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'belltower_intro') return null;
+  const onCooldown = s.bellCooldownTimer > 0;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#0a050f] border border-[#2f1a3a] shadow-[0_0_40px_rgba(80,0,120,0.5)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#8f3ab0,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#2f1a3a] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#7a6090]">Bell Tower Access</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#c5a0e0] animate-pulse">
+              {'>>> RESONANCE_DETECTED'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#060309]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#c5a0e0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              "这并不是一座普通的钟楼。所谓的'钟'，是一颗由无数人类头骨和暗金矿石熔铸而成的庞大球体。每当有风吹过，头骨的眼眶里便会发出窃窃私语般的嘶嘶声。"
+              <br /><br />
+              "塔壁上沾满了干涸的黑色粘液，空气中弥漫着令人作呕的铁锈与绝望的气息。连接巨钟的钟绳浸泡在某种黏性液体中，你能感觉到它在你手心里轻微地颤抖——如同一个活物在等待被唤醒。"
+            </div>
+
+            {onCooldown && (
+              <div className="mt-6 text-center text-[12px] text-purple-400/60 font-mono animate-pulse">
+                ⏳ 钟声余波尚未散去... 冷却中 [ {Math.ceil(s.bellCooldownTimer)}s ]
+              </div>
+            )}
+
+            <div className="mt-10 flex justify-center w-full gap-4">
+              <button
+                onClick={() => {
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#555] text-[#555] hover:bg-[#555]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 抑制疯狂 ]
+              </button>
+              <button
+                disabled={onCooldown}
+                onClick={() => {
+                  if (!onCooldown) {
+                    s.playerAttrs.intelligence = Math.max(0, s.playerAttrs.intelligence - 5);
+                    s.playerAttrs = snapAll(s.playerAttrs);
+                    playSound('read_corrupt');
+                    s.bellAttractTimer = 20.0;
+                    s.bellCooldownTimer = 30.0;
+                    addLog(s, '🔔 [钟楼] 刺耳的灵魂嘶嚎声自塔顶炸裂而出，在整个城堡的走廊里回荡...');
+                    s.status = 'belltower_rung';
+                    forceRender();
+                  }
+                }}
+                className={`px-8 py-3 bg-transparent border uppercase tracking-widest font-bold transition ${onCooldown ? 'border-[#4a2a55]/50 text-[#4a2a55]/50 cursor-not-allowed' : 'border-[#8f3ab0] text-[#c080e0] hover:bg-[#8f3ab0]/20 hover:text-white cursor-pointer'}`}
+              >
+                {onCooldown ? `[ 冷却中 ${Math.ceil(s.bellCooldownTimer)}s ]` : '[ 叩响巨钟 ] 消耗 5 智力'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const BellTowerRungOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'belltower_rung') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#0a050f] border border-[#2f1a3a] shadow-[0_0_50px_rgba(120,0,160,0.6)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#b060d0,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#2f1a3a] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#8a50a0]">Resonance Triggered</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#d0a0f0] animate-pulse">
+              {'>>> ENTITY_CONVERGENCE_ACTIVE'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#060309]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#d0a0f0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              "你狠下心，拉动了那根沾满粘液的钟绳。"
+              <br /><br />
+              "刺耳的、不似人类能发出的恐怖尖啸声从'巨钟'内爆发出来，仿佛成百上千个灵魂在同时哀嚎。这凄厉的声波不仅刺痛了你的大脑，更直接穿透了虚空。你感觉到某些东西从你的意识深处被强行抽取——那是清醒，那是理智，那是你曾经以为牢不可破的认知边界。"
+              <br /><br />
+              "那些在城堡里游荡的扭曲畸变体听到了这如同进食信号般的呼唤，正迈着癫狂的步伐，从四面八方向你所在的塔楼涌来。"
+            </div>
+            <div className="mt-6 text-center text-[11px] text-purple-400/70 font-mono">
+              ⚠️ 异响持续 20 秒 · 智力 -5 · 钟声吸引已激活
+            </div>
+            <div className="mt-10 flex justify-center w-full">
+              <button
+                onClick={() => {
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-10 py-3 bg-transparent border border-[#8f3ab0] text-[#c080e0] hover:bg-[#8f3ab0]/20 hover:text-white transition uppercase tracking-widest font-bold cursor-pointer"
+              >
+                [ 继续探索 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const PassageIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+
   const s = stateRef.current;
   if (s.status !== 'passage_intro') return null;
 
@@ -2311,6 +2475,26 @@ export default function App() {
 
   const forceRender = () => setRenderTick(t => t + 1);
 
+  const pickNextLoc = (adjRooms: RoomId[], isBellAttracting: boolean): RoomId => {
+    if (isBellAttracting && Math.random() < 0.8) {
+      let minDist = Infinity;
+      let bestRooms: RoomId[] = [];
+      adjRooms.forEach(r => {
+        const dist = DIST_TO_BELL_TOWER[r] ?? Infinity;
+        if (dist < minDist) {
+          minDist = dist;
+          bestRooms = [r];
+        } else if (dist === minDist) {
+          bestRooms.push(r);
+        }
+      });
+      if (bestRooms.length > 0) {
+        return bestRooms[Math.floor(Math.random() * bestRooms.length)];
+      }
+    }
+    return adjRooms[Math.floor(Math.random() * adjRooms.length)];
+  };
+
   // --- Realtime Game Loop Update ---
   const updateGame = (state: GameState, dt: number) => {
     if (state.status === 'gameover') return;
@@ -2320,6 +2504,8 @@ export default function App() {
     if (state.divinationCooldown > 0) state.divinationCooldown = Math.max(0, state.divinationCooldown - dt);
     if (state.invisibilityTimer > 0) state.invisibilityTimer = Math.max(0, state.invisibilityTimer - dt);
     if (state.trappedTimer > 0) state.trappedTimer = Math.max(0, state.trappedTimer - dt);
+    if (state.bellCooldownTimer > 0) state.bellCooldownTimer = Math.max(0, state.bellCooldownTimer - dt);
+    if (state.bellAttractTimer > 0) state.bellAttractTimer = Math.max(0, state.bellAttractTimer - dt);
 
     if (state.status === 'divination' && state.divinationResult) {
       state.divinationResult.timer += dt;
@@ -2743,16 +2929,16 @@ export default function App() {
         npc.nextMoveWait = 5 + 1.5 + Math.random(); // Next tick
 
         const npcRoom = ROOMS[npc.loc];
-        const nextRoomId = npc.nextLoc || npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+        const nextRoomId = npc.nextLoc || pickNextLoc(npcRoom.adj, state.bellAttractTimer > 0);
 
         if (ROOMS[nextRoomId]) {
           npc.loc = nextRoomId;
           // Pre-calculate next destination for intent tracking
           const newNpcRoom = ROOMS[npc.loc];
-          npc.nextLoc = newNpcRoom.adj[Math.floor(Math.random() * newNpcRoom.adj.length)];
+          npc.nextLoc = pickNextLoc(newNpcRoom.adj, state.bellAttractTimer > 0);
         } else {
           console.error(`Invalid room target: ${nextRoomId}`);
-          npc.nextLoc = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+          npc.nextLoc = pickNextLoc(npcRoom.adj, state.bellAttractTimer > 0);
         }
 
         npc.roomTimer = 0;
@@ -2797,14 +2983,14 @@ export default function App() {
       if (b.moveTimer >= 1.0) { // moves 1 room per second
         b.moveTimer = 0;
         const r = ROOMS[b.loc];
-        const nextId = b.nextLoc || r.adj[Math.floor(Math.random() * r.adj.length)];
+        const nextId = b.nextLoc || pickNextLoc(r.adj, state.bellAttractTimer > 0);
 
         if (ROOMS[nextId]) {
           b.loc = nextId;
           const nextR = ROOMS[b.loc];
-          b.nextLoc = nextR.adj[Math.floor(Math.random() * nextR.adj.length)];
+          b.nextLoc = pickNextLoc(nextR.adj, state.bellAttractTimer > 0);
         } else {
-          b.nextLoc = r.adj[Math.floor(Math.random() * r.adj.length)];
+          b.nextLoc = pickNextLoc(r.adj, state.bellAttractTimer > 0);
         }
 
         addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
@@ -3082,6 +3268,11 @@ export default function App() {
               📢 震耳嘶吼 (-50% 注意力)
             </div>
           )}
+          {s.bellAttractTimer > 0 && (
+            <div className="hidden sm:flex bg-purple-900/50 border border-purple-500 text-purple-200 text-[10px] px-2 py-0.5 animate-pulse items-center gap-1 shadow-[0_0_10px_purple_inset]">
+              ⚠️ 异响回荡：实体正向钟楼汇聚... ({Math.ceil(s.bellAttractTimer)}s)
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-[5px] sm:gap-[15px]">
           <div className="hidden sm:flex text-[10px] sm:text-[12px] bg-[#1a1410] border border-[#3d2b1f] text-[#a08b7a] px-2 py-1 items-center gap-2 shadow-[0_0_10px_rgba(61,43,31,0.5)_inset]">
@@ -3121,6 +3312,8 @@ export default function App() {
         <PassageIntroOverlay stateRef={stateRef} forceRender={forceRender} />
         <PassageFailureOverlay stateRef={stateRef} forceRender={forceRender} />
         <PassageVictoryOverlay stateRef={stateRef} forceRender={forceRender} />
+        <BellTowerIntroOverlay stateRef={stateRef} forceRender={forceRender} />
+        <BellTowerRungOverlay stateRef={stateRef} forceRender={forceRender} />
         <ReadingOverlay stateRef={stateRef} forceRender={forceRender} />
         <DivinationOverlay stateRef={stateRef} />
         <WarningOverlay stateRef={stateRef} />
