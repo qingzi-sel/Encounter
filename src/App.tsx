@@ -326,6 +326,7 @@ interface GameState {
   debugShowIntentions?: boolean;
   debugForceSeal?: boolean;
   debugDisableGreenMidnight?: boolean;
+  difficulty: 'easy' | 'normal' | 'nightmare';
   rustedCoins: number;
   hasMetScavenger?: boolean;
   hasOmniscienceEye?: boolean;
@@ -467,6 +468,7 @@ function getInitialGameState(): GameState {
     hasOmniscienceEye: false,
     secretPassageCleared: false,
     globalEventTimer: 0,
+    difficulty: 'normal',
     greenMidnight: { active: false, timer: 0, angle: 0, hitCooldown: 0 },
     beast: {
       satiety: 100,
@@ -3421,6 +3423,50 @@ export default function App() {
             <span>🪙 记忆币:</span>
             <span className="font-bold text-[#d4c3b5]">{s.rustedCoins}</span>
           </div>
+          <div className="flex bg-black border border-theme-border/50 h-[24px] items-center px-1 gap-1">
+            <span className="text-[9px] text-[#8b949e] uppercase px-1 border-r border-theme-border/30 h-full flex items-center">难度</span>
+            <select
+              value={s.difficulty}
+              onChange={(e) => {
+                const diff = e.target.value as any;
+                s.difficulty = diff;
+                
+                // Difficulty Logic
+                if (diff === 'easy') {
+                  s.debugInfiniteSatiety = true;
+                  s.debugInfiniteCoins = true;
+                  s.debugShowPaths = true;
+                  s.debugDisableGreenMidnight = true;
+                  s.debugShowIntentions = true;
+                  s.debugHideLogs = true;
+                  addLog(s, `⚙️ 难度切换：[简单模式] - 已开启全辅助系统。`);
+                } else if (diff === 'normal') {
+                  s.debugInfiniteSatiety = true;
+                  s.debugInfiniteCoins = false;
+                  s.debugShowPaths = false;
+                  s.debugDisableGreenMidnight = true;
+                  s.debugShowIntentions = false;
+                  s.debugHideLogs = true;
+                  addLog(s, `⚙️ 难度切换：[普通模式] - 已保留基础辅助系统。`);
+                } else {
+                  s.debugInfiniteSatiety = false;
+                  s.debugInfiniteCoins = false;
+                  s.debugShowPaths = false;
+                  s.debugDisableGreenMidnight = false;
+                  s.debugShowIntentions = false;
+                  s.debugHideLogs = false;
+                  addLog(s, `⚙️ 难度切换：[噩梦模式] - 已禁用所有辅助，祝你好运。`);
+                }
+                forceRender();
+              }}
+              className="bg-transparent text-[10px] text-theme-cyan outline-none cursor-pointer font-bold uppercase tracking-widest px-1"
+            >
+              <option value="easy" className="bg-[#0a0a0a] text-green-500">简单 (Easy)</option>
+              <option value="normal" className="bg-[#0a0a0a] text-theme-cyan">普通 (Normal)</option>
+              <option value="nightmare" className="bg-[#0a0a0a] text-red-500">噩梦 (Nightmare)</option>
+            </select>
+          </div>
+
           <span className="text-[12px] hidden sm:block">生命体征</span>
           {/* Health Bar using Immersive UI pattern structure inside Header */}
           <div className="w-[120px] sm:w-[300px] md:w-[400px] h-[24px] bg-black border border-theme-border relative">
