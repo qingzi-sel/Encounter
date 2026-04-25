@@ -283,7 +283,7 @@ const ROOMS: Record<RoomId, RoomDef> = {
     name: '厨房',
     attrs: ['focus'],
     adj: ['LivingRoom', 'Yard', 'WineCellar'],
-    desc: '巨大的铁锅里正炖煮着某些不可名状的软体组织。这里的屠宰刀即使没有人操作，也会偶尔发出清脆的撞击声，像是在渴望着新鲜的切口。'
+    desc: '巨大的铁锅里正炖煮着某些不可名状的软体组织。这里的屠宰刀即使没有人操作，也会偶尔发出清脆的撞击声，像是在渴望着新鲜的切口。\n\n“在一堆堆翻滚着的、令人作呕的软体组织残骸旁，一个被遗忘在角落的银色冷藏盒引起了你的注意。盒子上贴着一张泛黄的标签，上面的字迹虽然模糊，但依然能够辨认：**『紧急生体维持补给』**。\n\n撬开生锈的锁扣，你看到了三样与这里氛围格格不入的物品：一袋包装完好的**精制猫粮**，几块真空压缩的**冻干鸡胸肉**，以及一小瓶澄澈如金的**纯净米油**。”'
   },
   WineCellar: {
     id: 'WineCellar',
@@ -370,7 +370,7 @@ interface BeastState {
   nextLoc: RoomId | null;
 }
 
-type ItemType = 'ether_potion' | 'hourglass' | 'straw_doll';
+type ItemType = 'ether_potion' | 'hourglass' | 'straw_doll' | 'cat_food' | 'chicken_breast' | 'rice_oil';
 
 interface ReadingData {
   bookType: 20 | 50;
@@ -472,6 +472,7 @@ interface GameState {
   showWarningTimer: number;
   showRoomDesc: boolean;
   roomEggStates: Record<string, { phase: number; progress: number }>; // phase 0: hidden, 1: typing, 2: done
+  kitchenChoice: ItemType | null;
 }
 
 // --- Logic Helpers ---
@@ -606,6 +607,7 @@ function getInitialGameState(): GameState {
     glitchCycle: 60,
     showRoomDesc: false,
     roomEggStates: {},
+    kitchenChoice: null,
     logs: ['[系统] 欢迎来到《Encounter 遭遇》。由于处于超重力区域，总属性上限受限，请先分配你的初始 20 点属性。'],
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
@@ -840,6 +842,20 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
             <span className="text-[10px] text-theme-text/30">空无一物...</span>
           ) : (
             s.inventory.slice(0, 3).map((item, idx) => {
+              const isFood = ['cat_food', 'chicken_breast', 'rice_oil'].includes(item);
+              const details = ITEM_DETAILS[item];
+
+              if (isFood) {
+                return (
+                  <div
+                    key={idx}
+                    className="border border-gray-500/30 bg-black/20 text-gray-500/50 p-1 px-2 text-[10px] uppercase italic"
+                  >
+                    [{details?.name || '未知物资'}]
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={idx}
@@ -856,7 +872,6 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                       } else if (item === 'straw_doll') {
                         s.traps.push(s.playerLoc as RoomId);
                         addLog(s, `🔥 你在 ${ROOMS[s.playerLoc as RoomId].name} 放置了【厄运稻草人】。`);
-                        // Immediate trigger if any NPC is already in the room
                         const npcInRoom = s.npcs.find(n => !n.isDead && n.loc === s.playerLoc);
                         if (npcInRoom) {
                           s.traps = s.traps.filter(t => t !== s.playerLoc);
@@ -871,7 +886,7 @@ const PlayerStatePanel = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                   }}
                   className="border border-yellow-500/50 bg-black text-yellow-500 p-1 px-2 text-[10px] hover:bg-yellow-500/20 uppercase cursor-pointer"
                 >
-                  [{item === 'ether_potion' ? '隐世药剂' : item === 'hourglass' ? '时光沙漏' : '厄运稻草人'}]
+                  [{details?.name || '未知物品'}]
                 </button>
               );
             })
@@ -2251,6 +2266,17 @@ const PassageVictoryOverlay = ({ stateRef, forceRender }: { stateRef: React.Muta
     </div>
   );
 };
+
+// --- Global UI Data ---
+const ITEM_DETAILS: Record<ItemType, { name: string, desc: string, color: string }> = {
+  'ether_potion': { name: '深渊浓缩液 [隐世药剂]', desc: '饮用后短暂脱离物质位面，屏蔽所有实体的感知与恶意。持续 5 秒。', color: 'cyan' },
+  'hourglass': { name: '遗容碎片 [时光沙漏]', desc: '碾碎它以扭曲局部时间流速，使下一次属性重组不再需要时间读条，瞬间完成。', color: 'yellow' },
+  'straw_doll': { name: '受诅咒的扎草体 [厄运稻草人]', desc: '将其遗弃在当前房间作为陷阱。踏入此地的第一个实体将遭到恐怖诅咒，其所有属性被强制削减 50%。', color: 'purple' },
+  'cat_food': { name: '精制猫粮', desc: '一袋来自异世界的补给，散发着诱人的香气。也许能在特定的遭遇中作为礼物……', color: 'cyan' },
+  'chicken_breast': { name: '冻干鸡胸肉', desc: '高度浓缩的纯净蛋白质。在资源匮乏的洋馆中，这是绝对的奢侈品。', color: 'green' },
+  'rice_oil': { name: '纯净米油', desc: '琥珀色的油脂。除了食用，其极佳的润滑性或许在处理某些机械结构时会有奇效。', color: 'yellow' }
+};
+
 const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
   const s = stateRef.current;
   if (s.status !== 'inventory') return null;
@@ -2287,12 +2313,6 @@ const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
     }
   };
 
-  const itemDetails: Record<ItemType, { name: string, desc: string, color: string }> = {
-    'ether_potion': { name: '深渊浓缩液 [隐世药剂]', desc: '饮用后短暂脱离物质位面，屏蔽所有实体的感知与恶意。持续 5 秒。', color: 'cyan' },
-    'hourglass': { name: '遗容碎片 [时光沙漏]', desc: '碾碎它以扭曲局部时间流速，使下一次属性重组不再需要时间读条，瞬间完成。', color: 'yellow' },
-    'straw_doll': { name: '受诅咒的扎草体 [厄运稻草人]', desc: '将其遗弃在当前房间作为陷阱。踏入此地的第一个实体将遭到恐怖诅咒，其所有属性被强制削减 50%。', color: 'purple' }
-  };
-
   return (
     <div className="absolute inset-0 z-[120] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/90 backdrop-blur-md" />
@@ -2320,8 +2340,10 @@ const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(itemCounts).map(([itemKey, count]) => {
                 const item = itemKey as ItemType;
-                const details = itemDetails[item];
+                const details = ITEM_DETAILS[item];
                 if (!details) return null;
+
+                const isFood = ['cat_food', 'chicken_breast', 'rice_oil'].includes(item);
 
                 return (
                   <div key={item} className={`border border-${details.color}-900/30 bg-black/40 p-4 flex flex-col gap-3 group hover:border-${details.color}-700/50 transition-colors`}>
@@ -2333,12 +2355,18 @@ const InventoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
                       {details.desc}
                     </div>
                     <div className="mt-auto pt-2">
-                      <button
-                        onClick={() => handleUseItem(item)}
-                        className={`w-full py-2 bg-${details.color}-950/20 border border-${details.color}-900/50 text-${details.color}-500/80 hover:bg-${details.color}-900/40 hover:text-${details.color}-400 hover:border-${details.color}-600 uppercase text-[12px] tracking-widest font-bold transition-all`}
-                      >
-                        [ 提取并使用 ]
-                      </button>
+                      {!isFood ? (
+                        <button
+                          onClick={() => handleUseItem(item)}
+                          className={`w-full py-2 bg-${details.color}-950/20 border border-${details.color}-900/50 text-${details.color}-500/80 hover:bg-${details.color}-900/40 hover:text-${details.color}-400 hover:border-${details.color}-600 uppercase text-[12px] tracking-widest font-bold transition-all`}
+                        >
+                          [ 提取并使用 ]
+                        </button>
+                      ) : (
+                        <div className="w-full py-2 bg-gray-950/10 border border-gray-900/30 text-gray-600 text-center uppercase text-[10px] tracking-widest font-bold italic">
+                          /// 剧情道具：不可直接使用 ///
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2774,7 +2802,11 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
   const parts = fullText.split('\n\n');
   const normalText = parts[0];
   const eggText = parts[1] || "";
-  const hasEggText = eggText.length > 0;
+
+  // 因果锁定：厨房的第二段文字只有在见过城门庭院的猫之后才会触发
+  const isKitchen = s.playerLoc === 'Kitchen';
+  const hasSeenCat = s.roomEggStates['Yard']?.phase === 2;
+  const hasEggText = eggText.length > 0 && (!isKitchen || hasSeenCat);
 
   // 获取或初始化当前房间的状态
   if (!s.roomEggStates[s.playerLoc]) {
@@ -2801,7 +2833,7 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
 
   const handleReturn = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    
+
     // 如果有第二段文字且尚未触发，则点击后进入打字阶段
     if (hasEggText && roomState.phase === 0) {
       roomState.phase = 1;
@@ -2809,10 +2841,10 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
       forceRender();
       return;
     }
-    
+
     // 正在打字时不允许关闭（和大图书馆一致）
     if (hasEggText && roomState.phase === 1) return;
-    
+
     s.showRoomDesc = false;
     forceRender();
   };
@@ -2860,18 +2892,76 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
             {/* Easter Egg Part - Dynamic */}
             {/* Easter Egg Part - Dynamic Typewriter */}
             {hasEggText && roomState.phase >= 1 && (
-              <p className="mt-6 indent-8 text-theme-cyan/90 border-l-2 border-theme-cyan/20 pl-4 bg-theme-cyan/5 py-4 italic">
-                <CorruptedText
-                  text={eggText.slice(0, roomState.progress)}
-                  color="cyan"
-                  tick={tick + 50}
-                  stateRef={stateRef}
-                />
-                {roomState.phase === 1 && <span className="inline-block w-2 h-4 bg-theme-cyan ml-1 animate-pulse" />}
+              <div className="mt-6 flex flex-col gap-4">
+                <div className="indent-8 text-theme-cyan/90 border-l-2 border-theme-cyan/20 pl-4 bg-theme-cyan/5 py-4 italic">
+                  <CorruptedText
+                    text={eggText.slice(0, roomState.progress)}
+                    color="cyan"
+                    tick={tick + 50}
+                    stateRef={stateRef}
+                  />
+                  {roomState.phase === 1 && <span className="inline-block w-2 h-4 bg-theme-cyan ml-1 animate-pulse" />}
+                </div>
+
+                {/* 厨房三选一交互 UI */}
+                {isKitchen && roomState.phase === 2 && (
+                  <div className="flex flex-col gap-3 p-4 border border-theme-cyan/20 bg-theme-cyan/5 rounded-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
+                    <div className="text-[11px] text-theme-cyan/60 font-bold uppercase tracking-[2px] mb-1 text-center">
+                      {s.kitchenChoice ? `已选择补给方案：${s.kitchenChoice === 'cat_food' ? '精制猫粮' : s.kitchenChoice === 'chicken_breast' ? '冻干鸡胸肉' : '纯净米油'}` : '/// 请选择一项补给并带走 ///'}
+                    </div>
+                    {!s.kitchenChoice ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        <button
+                          onClick={() => {
+                            s.kitchenChoice = 'cat_food';
+                            s.inventory.push('cat_food');
+                            addLog(s, "🍱 你带走了一袋【精制猫粮】。某种微弱的联系感在脑海中一闪而过。");
+                            forceRender();
+                          }}
+                          className="py-2 border border-theme-cyan/30 text-theme-cyan/80 hover:bg-theme-cyan/20 hover:border-theme-cyan transition-all text-[11px] font-bold uppercase"
+                        >
+                          精制猫粮
+                        </button>
+                        <button
+                          onClick={() => {
+                            s.kitchenChoice = 'chicken_breast';
+                            s.inventory.push('chicken_breast');
+                            addLog(s, "🍗 你带走了一些【冻干鸡胸肉】。纯净的蛋白质在此地显得弥足珍贵。");
+                            forceRender();
+                          }}
+                          className="py-2 border border-theme-cyan/30 text-theme-cyan/80 hover:bg-theme-cyan/20 hover:border-theme-cyan transition-all text-[11px] font-bold uppercase"
+                        >
+                          冻干鸡胸肉
+                        </button>
+                        <button
+                          onClick={() => {
+                            s.kitchenChoice = 'rice_oil';
+                            s.inventory.push('rice_oil');
+                            addLog(s, "🍶 你带走了一瓶【纯净米油】。琥珀色的液体折射着理性的光泽。");
+                            forceRender();
+                          }}
+                          className="py-2 border border-theme-cyan/30 text-theme-cyan/80 hover:bg-theme-cyan/20 hover:border-theme-cyan transition-all text-[11px] font-bold uppercase"
+                        >
+                          纯净米油
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-theme-cyan/40 text-center italic">
+                        剩余的补给在接触空气后迅速碳化，化为了飞灰。
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!hasEggText && eggText.length > 0 && isKitchen && (
+              <p className="mt-4 text-[13px] text-theme-text/40 italic">
+                （在这里的角落里似乎还有些什么，但目前的你还缺少某些‘因果’来开启它……）
               </p>
             )}
 
-            {!hasEggText && room.desc.split('\n\n').slice(1).map((p, i) => (
+            {!hasEggText && eggText.length === 0 && room.desc.split('\n\n').slice(1).map((p, i) => (
               <p key={i} className="mt-4 indent-8">
                 <CorruptedText text={p} color="white" tick={tick + i * 20} stateRef={stateRef} />
               </p>
@@ -2883,16 +2973,18 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
               onClick={handleReturn}
               className={`px-10 py-2 border transition-all uppercase text-[11px] tracking-[4px] font-bold ${hasEggText && roomState.phase === 1
                 ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-                : 'border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan'
+                : (isKitchen && hasEggText && roomState.phase === 2 && !s.kitchenChoice)
+                  ? 'border-gray-800 text-gray-600 cursor-not-allowed' // 强制三选一，选完才能走
+                  : 'border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan'
                 }`}
-              disabled={hasEggText && roomState.phase === 1}
+              disabled={(hasEggText && roomState.phase === 1) || (isKitchen && hasEggText && roomState.phase === 2 && !s.kitchenChoice)}
             >
               {hasEggText && roomState.phase === 0
                 ? '[ 闭目冥思 ] 返回现实'
                 : hasEggText && roomState.phase === 1
                   ? '…… 等等，那是？'
                   : hasEggText && roomState.phase === 2
-                    ? '[ 颤抖 ] 离开这里'
+                    ? (isKitchen && !s.kitchenChoice ? '/// 必须做出选择 ///' : '[ 颤抖 ] 离开这里')
                     : '[ 闭目冥思 ] 返回现实'}
             </button>
           </div>
@@ -2942,8 +3034,8 @@ export default function App() {
       if (myLoopId !== globalLoopId) return;
 
       const s = stateRef.current;
-      const isPaused = s.showRoomDesc || s.lookoutMode || 
-                       ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status);
+      const isPaused = s.showRoomDesc || s.lookoutMode ||
+        ['shop_intro', 'passage_intro', 'watchtower_intro', 'belltower_intro', 'passage_victory', 'passage_failure', 'belltower_rung', 'reading', 'divination', 'shop', 'inventory'].includes(s.status);
 
       if (isPaused) {
         lastTime = time;
@@ -2961,7 +3053,7 @@ export default function App() {
         setRenderTick(t => t + 1);
         renderTimer = 0;
       }
-      
+
       frameId = requestAnimationFrame(loop);
     };
 
