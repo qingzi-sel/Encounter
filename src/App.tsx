@@ -324,6 +324,7 @@ interface GameState {
   debugInfiniteCoins?: boolean;
   debugHideLogs?: boolean;
   debugShowIntentions?: boolean;
+  debugForceSeal?: boolean;
   debugDisableGreenMidnight?: boolean;
   rustedCoins: number;
   hasMetScavenger?: boolean;
@@ -460,6 +461,7 @@ function getInitialGameState(): GameState {
     lookoutPanX: 0,
     lookoutPanY: 0,
     debugInfiniteInvisibility: false,
+    debugForceSeal: false,
     debugInfiniteCoins: false,
     rustedCoins: 0,
     hasOmniscienceEye: false,
@@ -3090,6 +3092,13 @@ export default function App() {
 
     // 4. Process Beast
     const b = state.beast;
+    if (state.debugForceSeal) {
+      b.state = 'contained';
+      b.loc = 'Dungeon';
+      b.satiety = b.maxSatiety || 100;
+      b.nextLoc = null;
+    }
+
     if (b.state === 'contained') {
       const bMax = b.maxSatiety || 100;
       if (state.debugInfiniteSatiety) {
@@ -3610,6 +3619,30 @@ export default function App() {
                   隐藏通信日志
                 </label>
 
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-purple-400">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugForceSeal}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      stateRef.current.debugForceSeal = checked;
+                      if (checked) {
+                        const b = stateRef.current.beast;
+                        b.state = 'contained';
+                        b.loc = 'Dungeon';
+                        b.satiety = b.maxSatiety || 100;
+                        b.nextLoc = null;
+                        stateRef.current.logs.push(`[开发者] 强制封印 [地牢实体]`);
+                      } else {
+                        stateRef.current.logs.push(`[开发者] 解除 [地牢实体] 的绝对封印`);
+                      }
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-purple-500"
+                  />
+                  绝对封印 (强制怪物回笼)
+                </label>
+
                 <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
                   <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
                   <button
@@ -3630,6 +3663,7 @@ export default function App() {
                     {s.greenMidnight.active ? '中止 绿色的午夜' : '触发 [绿色的午夜]'}
                   </button>
                 </div>
+
 
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-500/30 w-full justify-between">
                   <input id="devInputTotal" type="number" placeholder="总属性 (例: 100)" className="w-[120px] bg-[#001] border border-blue-500/50 text-[11px] px-1.5 py-1 text-white outline-none" />
