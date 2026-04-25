@@ -2291,7 +2291,70 @@ const ShopOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObje
   );
 };
 
-const CombatDialogOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameState> }) => {
+// --- Corrupted Text Component for Cthulhu Aesthetic ---
+const CORRUPTION_MAP: Record<string, Record<string, string>> = {
+  'white': {
+    '苍白幽影': '死寂之形',
+    '雾气': '凝固的悲鸣',
+    '虚假轮廓': '亵渎神像',
+    '热量': '魂火',
+    '残像': '诅咒'
+  },
+  '#2563eb': {
+    '深蓝巡卫': '深渊狱卒',
+    '深海生物': '寄生灵魂',
+    '集体意识': '混乱虫群',
+    '潮汐': '死亡搏动',
+    '冷光': '引渡之火'
+  },
+  '#a855f7': {
+    '紫晶判官': '亵渎监考官',
+    '引力场': '灵魂绞肉机',
+    '处决': '祭献',
+    '审判': '凌迟',
+    '晶体': '眼球'
+  },
+  '#ef4444': {
+    '深红渊主': '血海真主',
+    '多面体': '跳动的心房',
+    '血色': '脓稠',
+    '深渊': '子宫',
+    '搏动': '咀嚼'
+  }
+};
+
+const CorruptedText = ({ text, color, tick }: { text: string, color: string, tick: number }) => {
+  const map = CORRUPTION_MAP[color];
+  if (!map) return <span>{text}</span>;
+
+  const keys = Object.keys(map);
+  if (keys.length === 0) return <span>{text}</span>;
+
+  // Each cycle is ~1.2 seconds (60 ticks)
+  const cycle = 60;
+  const glitchDuration = 20; // ~0.4s
+  
+  const currentCycleIndex = Math.floor(tick / cycle);
+  const cycleProgress = tick % cycle;
+  
+  const isGlitching = tick < glitchDuration || cycleProgress < glitchDuration; 
+  
+  let processedText = text;
+  if (isGlitching) {
+    const wordToCorruptIndex = currentCycleIndex % keys.length;
+    const targetKey = keys[wordToCorruptIndex];
+    const targetVal = map[targetKey];
+    processedText = processedText.split(targetKey).join(targetVal);
+  }
+
+  return (
+    <span className="transition-all duration-75">
+      {processedText}
+    </span>
+  );
+};
+
+const CombatDialogOverlay = ({ stateRef, tick }: { stateRef: React.MutableRefObject<GameState>, tick: number }) => {
   const s = stateRef.current;
   if (s.status !== 'combat' || !s.combatData) return null;
   const cd = s.combatData;
@@ -2326,7 +2389,9 @@ const CombatDialogOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<Ga
               className="text-[15px] sm:text-[17px] leading-[1.8] text-[#e0e0e0] font-sans font-medium tracking-wide w-full"
             >
               {cd.dialogText.split('\n').map((para, idx) => (
-                <p key={idx} className="mb-3 last:mb-0 indent-8">{para}</p>
+                <p key={idx} className="mb-3 last:mb-0 indent-8">
+                  <CorruptedText text={para} color={npc.color} tick={tick + idx * 12} />
+                </p>
               ))}
             </motion.div>
           </div>
@@ -2524,7 +2589,7 @@ const WarningOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameSta
 
 const ENCOUNTER_TEXTS: Record<string, string> = {
   'white': "房间的温度毫无征兆地坠入了冰点。在微弱的光影交错间，一团苍白的雾气悄然凝聚成了模糊的三角锥形。它没有实体，没有动作，只有一个不断剥落又重组的虚假轮廓。仅仅是待在它附近，身上的热量就在被无声地抽走。相比觅食，它更像是一个迷失在高维度的悲哀残像，正试图将靠近的生者一同拖入死寂。",
-  '#ADD8E6': "伴随着一阵微弱却刺耳的电流高频嗡鸣，一个泛着淡蓝色冷光的几何构造体从半空中切割而出。它的棱角异常锐利，表面流转着扫描仪般的幽光。它像一台执行抹除程序的机器般悬浮了一瞬。紧接着，湛蓝的锁定光线交织成网，周围的空气仿佛被封死在真空罐里。",
+  '#2563eb': "伴随着深海般潮湿且冰冷的威压，一个勉强维持人形的半透明薄膜实体拖着沉重的步履走来。那薄膜之下并非血肉，而是翻涌着的、发着幽蓝冷光的深海水体。无数细小的、带有复眼的深海生物在它体内疯狂游动，汇聚成某种混乱的集体意识，在注视你的瞬间，你仿佛听到了万米深渊下的沉闷回响。",
   '#a855f7': "极其强烈的精神撕裂感袭来，一尊散发着紫黑色微光的晶体凭空碾碎了前方的空间。当它悬浮在半空时，巨大且异样的引力场几乎要压断脊骨。处决式审判，已经降临。",
   '#ef4444': "视线所及之处，一切都被染成了作呕铁锈味的血色。那是一个正在空间中剧烈搏动的深红多面体，像是在吞咽着这片维度。目光交汇的瞬间，心脏泵血完全失控，仿佛深渊本身正向你敞开怀抱。"
 };
@@ -2537,12 +2602,12 @@ const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
     intelligence: "幽影扭曲了{room}的物理结构，你凭借记忆中的几何坐标进行心算，在倒错的瞬间找到唯一的平衡点躲过绞杀。",
     focus: "整个{room}充斥着灵魂折损残音与雪花，你强忍眩晕，将视线死死钉在几何体核心唯一的实体上。"
   },
-  '#ADD8E6': {
-    stamina: "巡卫释放的高压电弧封锁了{room}出路，在电网中，你依靠极限的肌肉拉扯翻滚闪避。",
-    strength: "合金构造体雷霆万钧地砸碎了{room}地板，你举起沉重杂物与这无情的机械生硬硬撼。",
-    patience: "蓝光在{room}扫掠；你蜷缩在死角犹如雕塑般纹丝不动，与它在毫秒间隐蔽博弈。",
-    intelligence: "光束折射暴露出致命运算逻辑，你在{room}穿梭并疯狂预判它的下一步封锁。",
-    focus: "在{room}致盲闪光中，你强忍刺痛，凝神捕捉悬浮引擎发出的微末气流声以定位。"
+  '#2563eb': {
+    stamina: "巡卫体内的深蓝液体开始剧烈沸腾，放射出能灼伤灵魂的高能冷光，你拼尽全力在{room}这片被海水浸透的虚空压力中维持呼吸。",
+    strength: "那团扭动的液态巨手狠狠拍落，你感觉自己不是在对抗生物，而是在{room}中对抗整个大洋的恐怖推力。",
+    patience: "数万只发光小鱼的视线在{room}中盲目扫视；你躲在阴影里纹丝不动，直到那团扭动的蓝光在错觉中缓缓移开。",
+    intelligence: "巡卫内部的流动频率暗示了某种不可名状的潮汐规律，你疯狂计算着压力差，试图在{room}的水压将你压扁前找到逃逸点。",
+    focus: "在那片幽蓝的盲目光芒中，你强忍眩晕，死死感知着{room}空气中水汽的浓度变化，以此判定这个深渊化身的真实位置。"
   },
   '#a855f7': {
     stamina: "引力波将{room}气压翻倍，你顶着脏器破裂痛苦在极度缺氧的重压下艰难拉锯。",
@@ -2562,14 +2627,14 @@ const ACTION_TEXTS: Record<string, Record<AttrType, string>> = {
 
 const SUCCESS_TEXTS: Record<string, string> = {
   'white': "苍白轮廓溃散了一部分，寒气稍歇。你如饥似渴地吸取了散落的维度残骸。",
-  '#ADD8E6': "伴随着机能过载火花，巡卫的外壳出现裂纹。你趁着死机空档抽走了少量能源。",
+  '#2563eb': "那层脆弱的皮肤被你撕裂，冰冷的深海水体喷涌而出。你趁机掠夺了那些发光生物所携带的远古记忆碎片。",
   '#a855f7': "傲慢宣告戛然而止，引力囚笼崩塌。你抓住跌落间隙强行掠夺了部分法则。",
   '#ef4444': "猩红的怒涛竟被硬生生逼退，血色翻涌间你逆流而上，野蛮撕下并吞噬了它的权柄。"
 };
 
 const FAILURE_TEXTS: Record<string, string> = {
   'white': "彻骨阴寒穿透长空，轮廓在视觉中放大，带走了体温的同时也抽走了你的部分核心维系。",
-  '#ADD8E6': "在物理锁定下，冷酷的裁决光束无情削去了你的一部分能力基盘。",
+  '#2563eb': "幽蓝的水光将你吞没，你感觉到自己的理智正在被那些微小的寄生生物啃食，连同你的存在本身也被拖向深海。",
   '#a855f7': "如同实质的紫色重压将你摁在地上，你的高维潜能被审判官强行抽出、剥夺。",
   '#ef4444': "血海倒灌进肺腑，渊主的威压让你无法反击，大量生存资本被无情碾碎吞噬。"
 };
@@ -3506,7 +3571,7 @@ export default function App() {
         <ReadingOverlay stateRef={stateRef} forceRender={forceRender} />
         <DivinationOverlay stateRef={stateRef} />
         <WarningOverlay stateRef={stateRef} />
-        <CombatDialogOverlay stateRef={stateRef} />
+        <CombatDialogOverlay stateRef={stateRef} tick={(s.combatData?.timer || 0) * 50} />
 
         {/* Right Column: Logs */}
         <aside className="bg-theme-card border border-theme-border p-3 sm:p-4 flex flex-col min-h-[450px] lg:h-full lg:overflow-y-auto shrink-0 relative custom-scrollbar">
