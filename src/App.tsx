@@ -281,7 +281,7 @@ interface ChaseData {
 }
 
 interface GameState {
-  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro';
+  status: 'setup' | 'playing' | 'gameover' | 'combat' | 'reading' | 'divination' | 'chasing' | 'shop' | 'shop_intro' | 'passage_intro' | 'passage_victory' | 'passage_failure';
   combatData?: CombatData;
   chaseData?: ChaseData;
   globalEventTimer: number;
@@ -304,6 +304,8 @@ interface GameState {
   debugDisableGreenMidnight?: boolean;
   rustedCoins: number;
   hasMetScavenger?: boolean;
+  hasOmniscienceEye?: boolean;
+  secretPassageCleared?: boolean;
   divinationResult?: {
     card: 'hermit' | 'wheel' | 'hanged' | 'tower';
     timer: number;
@@ -432,6 +434,8 @@ function getInitialGameState(): GameState {
     debugInfiniteInvisibility: false,
     debugInfiniteCoins: false,
     rustedCoins: 0,
+    hasOmniscienceEye: false,
+    secretPassageCleared: false,
     globalEventTimer: 0,
     greenMidnight: { active: false, timer: 0, angle: 0, hitCooldown: 0 },
     beast: {
@@ -796,9 +800,9 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
       if (s.chaseData.isUpPath) {
         if (i <= 10) chaseNodesToRender.push({ i, isUp: false });
         else chaseNodesToRender.push({ i, isUp: true });
-        
+
         if (s.chaseData.safeRoomSpawned && i === 15) {
-           chaseNodesToRender.push({ i, isUp: true, isSafe: true });
+          chaseNodesToRender.push({ i, isUp: true, isSafe: true });
         }
       } else {
         chaseNodesToRender.push({ i, isUp: false });
@@ -927,10 +931,10 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                 )
               })()}
               {/* Top-level Intent Arrow Layer */}
-              {s.debugShowIntentions && s.status !== 'chasing' && (
+              {(s.hasOmniscienceEye || s.debugShowIntentions) && s.status !== 'chasing' && (
                 <g>
                   <defs>
-                     <marker id="npc-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
+                    <marker id="npc-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
                       <polygon points="0 0, 6 3, 0 6" fill="currentColor" opacity="0.6" />
                     </marker>
                     <marker id="beast-arrowhead-top" markerWidth="6" markerHeight="6" refX="24" refY="3" orient="auto">
@@ -991,44 +995,44 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
             {s.status === 'chasing' && s.chaseData ? (
               chaseNodesToRender.map((node) => {
                 const i = node.i;
-                
+
                 let isCurrent = false;
                 if (s.chaseData!.inSafeRoom) {
-                    if (node.isSafe) isCurrent = true;
+                  if (node.isSafe) isCurrent = true;
                 } else {
-                    if (s.chaseData!.playerRooms === i && (s.chaseData!.isUpPath || false) === node.isUp && !node.isSafe) isCurrent = true;
+                  if (s.chaseData!.playerRooms === i && (s.chaseData!.isUpPath || false) === node.isUp && !node.isSafe) isCurrent = true;
                 }
 
                 let isAdj = false;
                 if (s.chaseData!.inSafeRoom) {
-                    if (i === 15 && !node.isSafe && node.isUp) isAdj = true;
+                  if (i === 15 && !node.isSafe && node.isUp) isAdj = true;
                 } else if (s.chaseData!.playerRooms === 15 && node.isSafe && s.chaseData!.isUpPath) {
-                    isAdj = true;
+                  isAdj = true;
                 } else if (!node.isSafe) {
-                    // Forward
-                    if (s.chaseData!.playerRooms + 1 === i && (s.chaseData!.playerRooms === 10 ? true : (s.chaseData!.isUpPath || false) === node.isUp)) isAdj = true;
-                    // Backward
-                    if (s.chaseData!.playerRooms - 1 === i) {
-                        if (i <= 10) isAdj = true; // can retreat freely in the initial 0-10 corridor
-                        else if ((s.chaseData!.isUpPath || false) === node.isUp) isAdj = true; // otherwise must match path (Up vs Normal)
-                    }
+                  // Forward
+                  if (s.chaseData!.playerRooms + 1 === i && (s.chaseData!.playerRooms === 10 ? true : (s.chaseData!.isUpPath || false) === node.isUp)) isAdj = true;
+                  // Backward
+                  if (s.chaseData!.playerRooms - 1 === i) {
+                    if (i <= 10) isAdj = true; // can retreat freely in the initial 0-10 corridor
+                    else if ((s.chaseData!.isUpPath || false) === node.isUp) isAdj = true; // otherwise must match path (Up vs Normal)
+                  }
                 }
 
                 const isHellDeath = !s.chaseData!.isUpPath && i === 11 && !node.isUp && s.chaseData!.playerRooms >= 10;
 
                 let boxCls = "border-theme-border/30 text-[#8b949e]";
                 if (node.isSafe) {
-                    boxCls = "border-theme-border/20 text-[#8b949e]/30 bg-transparent opacity-40 hover:opacity-100 hover:border-theme-cyan/50";
-                    if (isCurrent) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.05)] text-theme-cyan/50 z-20";
-                    else if (isAdj) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.02)] text-theme-cyan/60 hover:opacity-100 z-10 cursor-pointer";
+                  boxCls = "border-theme-border/20 text-[#8b949e]/30 bg-transparent opacity-40 hover:opacity-100 hover:border-theme-cyan/50";
+                  if (isCurrent) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.05)] text-theme-cyan/50 z-20";
+                  else if (isAdj) boxCls = "border-theme-cyan/30 bg-[rgba(0,242,255,0.02)] text-theme-cyan/60 hover:opacity-100 z-10 cursor-pointer";
                 } else {
-                    if (isCurrent) {
-                      boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
-                    } else if (isHellDeath) {
-                      boxCls = "border-theme-red bg-theme-red/10 animate-[pulse_1s_ease-in-out_infinite] text-theme-red cursor-pointer z-10 shadow-[0_0_15px_rgba(255,0,0,0.4)]";
-                    } else if (isAdj) {
-                      boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
-                    }
+                  if (isCurrent) {
+                    boxCls = "border-theme-cyan bg-theme-cyan/5 shadow-[0_0_15px_rgba(0,242,255,0.15)] z-20 text-theme-cyan";
+                  } else if (isHellDeath) {
+                    boxCls = "border-theme-red bg-theme-red/10 animate-[pulse_1s_ease-in-out_infinite] text-theme-red cursor-pointer z-10 shadow-[0_0_15px_rgba(255,0,0,0.4)]";
+                  } else if (isAdj) {
+                    boxCls = "border-theme-border hover:border-theme-cyan/80 hover:bg-theme-cyan/10 cursor-pointer z-10 text-theme-text";
+                  }
                 }
 
                 const coord = getChaseCoord(i, node.isUp, node.isSafe);
@@ -1039,25 +1043,25 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                     key={`chase-room-${i}-${node.isUp}-${node.isSafe}`}
                     onClick={() => {
                       if (isHellDeath) {
-                        s.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-                        s.status = 'gameover';
-                        addLog(s, `🔴 你踏入了标有“地狱”的房间，灵魂被瞬间剥夺。`);
+                        s.status = 'passage_failure';
+                        playSound('read_corrupt');
+                        forceRender();
                       } else if (isAdj) {
                         if (node.isSafe) {
-                            s.chaseData!.inSafeRoom = true;
-                            addLog(s, `🌫️ 你挤入了一道极难被察觉的狭缝空间中，屏住了呼吸...`);
+                          s.chaseData!.inSafeRoom = true;
+                          addLog(s, `🌫️ 你挤入了一道极难被察觉的狭缝空间中，屏住了呼吸...`);
                         } else if (s.chaseData!.inSafeRoom) {
-                            s.chaseData!.inSafeRoom = false;
-                            addLog(s, `👣 你悄无声息地离开裂痕，重新踏上前路。`);
+                          s.chaseData!.inSafeRoom = false;
+                          addLog(s, `👣 你悄无声息地离开裂痕，重新踏上前路。`);
                         } else {
-                            const isBackward = i < s.chaseData!.playerRooms;
-                            s.chaseData!.playerRooms = i;
-                            if (i === 11 && node.isUp) {
-                              s.chaseData!.isUpPath = true;
-                              addLog(s, `⬆️ 你踏上了向上蜿蜒的新路...`);
-                            } else if (isBackward) {
-                              addLog(s, `⬇️ 仓皇中，退回下方的阶梯...`);
-                            }
+                          const isBackward = i < s.chaseData!.playerRooms;
+                          s.chaseData!.playerRooms = i;
+                          if (i === 11 && node.isUp) {
+                            s.chaseData!.isUpPath = true;
+                            addLog(s, `⬆️ 你踏上了向上蜿蜒的新路...`);
+                          } else if (isBackward) {
+                            addLog(s, `⬇️ 仓皇中，退回下方的阶梯...`);
+                          }
                         }
                         playSound('move');
                       }
@@ -1121,7 +1125,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                           borderRight: '4px solid transparent',
                           borderBottom: `8px solid ${n.color}`,
                         }} className="animate-pulse" title={n.name} />
-                        {s.debugShowIntentions && (
+                        {(s.hasOmniscienceEye || s.debugShowIntentions) && (
                           <span className="text-[8px] font-bold leading-none" style={{ color: n.color }}>
                             {(n.nextMoveWait - n.moveTimer).toFixed(1)}s
                           </span>
@@ -1131,7 +1135,7 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
                     {isBeast && (
                       <div className="flex items-center gap-0.5">
                         <div className="w-[6px] h-[6px] bg-purple-500 rounded-full shadow-[0_0_8px_purple] animate-ping" title="Beast" />
-                        {s.debugShowIntentions && (
+                        {(s.hasOmniscienceEye || s.debugShowIntentions) && (
                           <span className="text-[8px] font-bold text-purple-400 leading-none">
                             {(1.0 - s.beast.moveTimer).toFixed(1)}s
                           </span>
@@ -1145,87 +1149,87 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
             })}
             {s.status === 'chasing' && s.chaseData && (() => {
               const renderMonster = (mDist: number, label: string, isBackMonster?: boolean) => {
-                  const mIndex = Math.floor(mDist);
-                  const mFract = mDist - mIndex;
-                  const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
-                  const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
-                  const mX = c1.x + (c2.x - c1.x) * mFract;
-                  const mY = c1.y + (c2.y - c1.y) * mFract;
+                const mIndex = Math.floor(mDist);
+                const mFract = mDist - mIndex;
+                const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
+                const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
+                const mX = c1.x + (c2.x - c1.x) * mFract;
+                const mY = c1.y + (c2.y - c1.y) * mFract;
 
-                  const isCharging = isBackMonster && s.chaseData!.skillState === 'charging';
+                const isCharging = isBackMonster && s.chaseData!.skillState === 'charging';
 
-                  return (
-                    <div
-                      key={`monster-${label}`}
-                      className="absolute flex items-center justify-center pointer-events-none"
-                      style={{
-                        left: `${mX * G_SPACING}px`, top: `${mY * G_SPACING}px`,
-                        transform: 'translate(-50%, -50%)',
-                        width: '40px', height: '40px',
-                        zIndex: 30
-                      }}
-                    >
-                      <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping" />
-                      <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">{label}</span>
-                      {isCharging && (
-                         <span className="absolute -top-[35px] -right-[15px] text-red-500 font-bold text-[24px] animate-bounce">!</span>
-                      )}
-                    </div>
-                  );
+                return (
+                  <div
+                    key={`monster-${label}`}
+                    className="absolute flex items-center justify-center pointer-events-none"
+                    style={{
+                      left: `${mX * G_SPACING}px`, top: `${mY * G_SPACING}px`,
+                      transform: 'translate(-50%, -50%)',
+                      width: '40px', height: '40px',
+                      zIndex: 30
+                    }}
+                  >
+                    <div className="w-[24px] h-[24px] bg-red-600 rounded-full animate-ping" />
+                    <span className="absolute -top-[20px] text-[10px] text-red-500 font-bold whitespace-nowrap">{label}</span>
+                    {isCharging && (
+                      <span className="absolute -top-[35px] -right-[15px] text-red-500 font-bold text-[24px] animate-bounce">!</span>
+                    )}
+                  </div>
+                );
               };
 
               // Strike Render
               const renderTentacleStrike = () => {
-                 if (s.chaseData!.skillState !== 'striking' || s.chaseData!.skillTargetRoom === undefined) return null;
-                 
-                 const mDist = s.chaseData!.monsterDistance;
-                 const mIndex = Math.floor(mDist);
-                 const mFract = mDist - mIndex;
-                 const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
-                 const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
-                 const mX = c1.x + (c2.x - c1.x) * mFract;
-                 const mY = c1.y + (c2.y - c1.y) * mFract;
-                 
-                 // Target centers
-                 const t1 = getChaseCoord(s.chaseData!.skillTargetRoom, s.chaseData!.isUpPath && s.chaseData!.skillTargetRoom >= 11);
-                 const t2 = getChaseCoord(s.chaseData!.skillTargetRoom! + 1, s.chaseData!.isUpPath && (s.chaseData!.skillTargetRoom! + 1) >= 11);
+                if (s.chaseData!.skillState !== 'striking' || s.chaseData!.skillTargetRoom === undefined) return null;
 
-                 // Render SVG lines from top/bottom holes
-                 return (
-                    <svg className="absolute inset-0 overflow-visible pointer-events-none z-40">
-                       <circle cx={mX * G_SPACING} cy={mY * G_SPACING - 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
-                       <circle cx={mX * G_SPACING} cy={mY * G_SPACING + 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
-                       
-                       <path 
-                          d={`M ${mX * G_SPACING} ${mY * G_SPACING - 30} L ${t2.x * G_SPACING} ${t2.y * G_SPACING}`} 
-                          stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
-                          className="animate-[pulse_0.1s_infinite]"
-                       />
-                       <path 
-                          d={`M ${mX * G_SPACING} ${mY * G_SPACING + 30} L ${t1.x * G_SPACING} ${t1.y * G_SPACING}`} 
-                          stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
-                          className="animate-[pulse_0.1s_infinite]"
-                       />
+                const mDist = s.chaseData!.monsterDistance;
+                const mIndex = Math.floor(mDist);
+                const mFract = mDist - mIndex;
+                const c1 = getChaseCoord(mIndex, s.chaseData!.isUpPath && mIndex >= 11);
+                const c2 = getChaseCoord(mIndex + 1, s.chaseData!.isUpPath && (mIndex + 1) >= 11);
+                const mX = c1.x + (c2.x - c1.x) * mFract;
+                const mY = c1.y + (c2.y - c1.y) * mFract;
 
-                       <rect 
-                          x={t1.x * G_SPACING - 42} y={t1.y * G_SPACING - 28} 
-                          width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
-                       />
-                       <rect 
-                          x={t2.x * G_SPACING - 42} y={t2.y * G_SPACING - 28} 
-                          width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
-                       />
-                    </svg>
-                 );
+                // Target centers
+                const t1 = getChaseCoord(s.chaseData!.skillTargetRoom, s.chaseData!.isUpPath && s.chaseData!.skillTargetRoom >= 11);
+                const t2 = getChaseCoord(s.chaseData!.skillTargetRoom! + 1, s.chaseData!.isUpPath && (s.chaseData!.skillTargetRoom! + 1) >= 11);
+
+                // Render SVG lines from top/bottom holes
+                return (
+                  <svg className="absolute inset-0 overflow-visible pointer-events-none z-40">
+                    <circle cx={mX * G_SPACING} cy={mY * G_SPACING - 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
+                    <circle cx={mX * G_SPACING} cy={mY * G_SPACING + 30} r={15} fill="black" stroke="red" strokeWidth={2} className="animate-spin" />
+
+                    <path
+                      d={`M ${mX * G_SPACING} ${mY * G_SPACING - 30} L ${t2.x * G_SPACING} ${t2.y * G_SPACING}`}
+                      stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
+                      className="animate-[pulse_0.1s_infinite]"
+                    />
+                    <path
+                      d={`M ${mX * G_SPACING} ${mY * G_SPACING + 30} L ${t1.x * G_SPACING} ${t1.y * G_SPACING}`}
+                      stroke="darkred" strokeWidth={6} strokeDasharray="10, 5" fill="none" opacity={0.8}
+                      className="animate-[pulse_0.1s_infinite]"
+                    />
+
+                    <rect
+                      x={t1.x * G_SPACING - 42} y={t1.y * G_SPACING - 28}
+                      width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
+                    />
+                    <rect
+                      x={t2.x * G_SPACING - 42} y={t2.y * G_SPACING - 28}
+                      width={84} height={56} fill="red" opacity={0.3} className="animate-ping"
+                    />
+                  </svg>
+                );
               };
 
               return (
-                 <>
-                    {renderMonster(s.chaseData!.monsterDistance, '追截虚无', true)}
-                    {s.chaseData!.frontMonsterActive && s.chaseData!.frontMonsterDistance !== undefined &&
-                       renderMonster(s.chaseData!.frontMonsterDistance, '降临虚无')}
-                    {renderTentacleStrike()}
-                 </>
+                <>
+                  {renderMonster(s.chaseData!.monsterDistance, '追截虚无', true)}
+                  {s.chaseData!.frontMonsterActive && s.chaseData!.frontMonsterDistance !== undefined &&
+                    renderMonster(s.chaseData!.frontMonsterDistance, '降临虚无')}
+                  {renderTentacleStrike()}
+                </>
               );
             })()}
           </div>
@@ -1324,23 +1328,26 @@ const MapPanel = ({ stateRef, handlePlayerMove, startReading, startDivination }:
           )}
 
           {room.id === 'ShadowCorridor' && (
-            <div className="flex flex-col gap-2 p-3 bg-[#2a111a] border border-[#aa5555]">
-              <div className="text-[10px] text-red-400/80 uppercase font-bold text-center border-b border-[#aa5555]/50 pb-1 mb-1">异空间入口</div>
-              <button
-                onClick={() => {
-                  s.status = 'chasing';
-                  s.chaseData = {
-                    playerRooms: 0,
-                    monsterDistance: -2, // Starts slightly behind
-                    targetRooms: 20,
-                    speed: 1.5 // rooms per second
-                  };
-                  addLog(s, `🏃 [警告] 你踏入了一条望不到尽头的长廊，身后传来令人不寒而栗的快速脚步声...`);
-                }}
-                className="w-full h-[36px] text-[12px] border border-red-500 text-red-500 uppercase transition-colors hover:bg-red-500/10 cursor-pointer"
-              >
-                [ 踏入长廊 ] 未知追截
-              </button>
+            <div className="flex flex-col gap-2 p-3 bg-[#1a0a0f] border border-[#552a2a] shadow-[0_0_15px_rgba(255,0,0,0.1)]">
+              <div className="text-[10px] text-red-500 font-bold uppercase text-center border-b border-red-900/50 pb-1 mb-1 tracking-[2px]">
+                空间裂缝：异界入口
+              </div>
+              
+              {s.secretPassageCleared ? (
+                <div className="w-full py-2 bg-black/40 border border-green-900/30 text-green-500/50 text-[11px] uppercase text-center tracking-widest">
+                  [ 裂缝已愈合 ]
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    s.status = 'passage_intro';
+                    forceRender();
+                  }}
+                  className="w-full h-[36px] text-[12px] border border-red-600 text-red-500 uppercase transition-all hover:bg-red-600/20 hover:text-red-400 cursor-pointer font-bold shadow-[0_0_10px_rgba(255,0,0,0.2)]"
+                >
+                  [ 靠近裂缝 ] 窥视深渊
+                </button>
+              )}
             </div>
           )}
 
@@ -1448,7 +1455,7 @@ const NpcStatePanel = ({ stateRef }: { stateRef: React.MutableRefObject<GameStat
                 <span className="font-bold">{room.name}</span>
               </div>
 
-              {s.debugShowIntentions && (
+              {(s.hasOmniscienceEye || s.debugShowIntentions) && (
                 <div className="text-[9px] text-theme-red/80 mt-1 flex justify-between border-t border-theme-red/10 pt-1">
                   <span>下次位移:</span>
                   <span className="font-bold text-yellow-500">{(npc.nextMoveWait - npc.moveTimer).toFixed(1)}s</span>
@@ -1592,25 +1599,200 @@ const ShopIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRe
           <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#030603]">
             <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#a0c5a0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
               “在满是铁锈的墙角阴影里，一个佝偻的无面生物正在咀嚼着一柄断剑。它察觉到了你的靠近，缓缓放下了手中散发着惨绿幽光的提灯。”
-              <br/><br/>
+              <br /><br />
               “这怪物长袍下延伸出来的，是由纯粹的影之触手所构成的密密麻麻的肢体。它那本该是脸的地方，只有一道深不可测的骇人裂口。”
-              <br/><br/>
+              <br /><br />
               “裂口对准了你，发出空灵而多重的低语：”
-              <br/><br/>
+              <br /><br />
               <span className="italic font-bold text-white">‘这座城堡正在被时间遗忘……交出那些锈蚀的记忆币，我愿意把我收集的小玩具借给你。’</span>
             </div>
-            
+
             <div className="mt-10 flex justify-center w-full">
-              <button 
-                onClick={() => { 
-                   s.status = 'shop'; 
-                   s.hasMetScavenger = true; 
-                   playSound('absorb'); 
-                   forceRender(); 
-                }} 
+              <button
+                onClick={() => {
+                  s.status = 'shop';
+                  s.hasMetScavenger = true;
+                  playSound('absorb');
+                  forceRender();
+                }}
                 className="px-8 py-3 bg-transparent border border-[#3a8f3a] text-[#3a8f3a] hover:bg-[#3a8f3a]/20 hover:text-white transition uppercase tracking-widest font-bold"
               >
                 [ 继续 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const PassageIntroOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'passage_intro') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#0a0505] border border-[#2f1a1a] shadow-[0_0_40px_rgba(40,0,0,0.6)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#8f3a3a,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#2f1a1a] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#807070]">Anomaly Detected</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#c5a0a0] animate-pulse">
+              {'>>> SPATIAL_GLITCH_ENTRY'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#060303]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#c5a0a0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              “这里的空气粘稠得像腐烂的沼泽。墙壁上的一道裂缝正像伤口一样微微律动，从黑暗深处传来了某种极其古老且节奏错乱的呼吸声。”
+              <br /><br />
+              “你感觉到有什么东西正在裂缝后窥视。那不是眼睛，而是一种超越感知的恶意。每一个毛孔都在尖叫着让你离开，但一种扭曲的吸引力正把你拽向那深邃的虚无。”
+            </div>
+
+            <div className="mt-10 flex justify-center w-full gap-4">
+              <button
+                onClick={() => {
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#555] text-[#555] hover:bg-[#555]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 抑制好奇 ]
+              </button>
+              <button
+                onClick={() => {
+                  s.status = 'chasing';
+                  s.chaseData = {
+                    playerRooms: 0,
+                    monsterDistance: -2,
+                    targetRooms: 20,
+                    speed: 1.5
+                  };
+                  addLog(s, `🏃 [警告] 你踏入了一条望不到尽头的长廊，身后传来令人不寒而栗的快速脚步声...`);
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#8f3a3a] text-[#8f3a3a] hover:bg-[#8f3a3a]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 踏入深渊 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const PassageFailureOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'passage_failure') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#0a0505] border border-[#2f1a1a] shadow-[0_0_40px_rgba(40,0,0,0.6)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#8f3a3a,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#2f1a1a] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#807070]">Sequence Aborted</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#c5a0a0] animate-pulse">
+              {'>>> SPATIAL_EJECTION'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#060303]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#c5a0a0] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              “黑暗中的触手将你猛然拽回了起点，那冰冷的粘液让你打了个寒颤。你尚未被完全消化，但某种意志正逼迫你重新开始。”
+              <br /><br />
+              “那股力量在嘲弄你的软弱，虚无的低语在你脑海中回荡：‘回去……回到那无尽的循环中去。’”
+            </div>
+
+            <div className="mt-10 flex justify-center w-full">
+              <button
+                onClick={() => {
+                  s.status = 'chasing';
+                  s.chaseData = {
+                    playerRooms: 0,
+                    monsterDistance: -2,
+                    targetRooms: 20,
+                    speed: 1.5
+                  };
+                  addLog(s, `👣 你在战栗中重新站起，再次踏入那条被诅咒的长廊...`);
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#8f3a3a] text-[#8f3a3a] hover:bg-[#8f3a3a]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 再次尝试 ]
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const PassageVictoryOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObject<GameState>, forceRender: () => void }) => {
+  const s = stateRef.current;
+  if (s.status !== 'passage_victory') return null;
+
+  return (
+    <div className="absolute inset-0 z-[110] pointer-events-none flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-sm pointer-events-auto" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="relative z-10 w-full max-w-3xl flex flex-col gap-4 pointer-events-auto"
+      >
+        <div className="flex-1 bg-[#050a0a] border border-[#1a2f2f] shadow-[0_0_40px_rgba(0,40,40,0.6)] overflow-hidden flex flex-col">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,transparent,#3a8f8f,transparent)]" />
+          <div className="px-6 py-4 border-b border-[#1a2f2f] flex justify-between items-center bg-black/50">
+            <span className="text-[12px] uppercase tracking-[0.2em] font-bold text-[#708080]">Evolution Complete</span>
+            <span className="text-[11px] font-mono tracking-widest text-[#a0c5c5] animate-pulse">
+              {'>>> OMNISCIENCE_EYE_AQUIRED'}
+            </span>
+          </div>
+          <div className="p-6 sm:p-10 flex-col items-center justify-center bg-[#030606]">
+            <div className="text-[16px] sm:text-[18px] leading-[2.0] text-[#a0c5c5] font-sans font-medium tracking-wide w-full indent-8 text-justify">
+              “一颗布满血丝、瞳孔不断收缩的眼球从虚空中跌落，在触碰你的一瞬间化作冰冷的液体渗入你的眼眶。一种沉重的‘知晓’感充斥了你的大脑。”
+              <br /><br />
+              “你的视线瞬间撕裂了现实的帷幕，那些怪物在迷宫中潜行的阴影、它们即将落下的脚步，都像墨水在清水中扩散般清晰可见。你从此不再盲目地奔逃，因为你已经看透了那些游荡者的舞步。”
+            </div>
+
+            <div className="mt-8 flex flex-col gap-2 w-full max-w-sm mx-auto">
+              <div className="flex justify-between text-[14px] border-b border-[#1a2f2f] pb-1">
+                <span className="text-[#708080]">智力 (INT)</span>
+                <span className="text-[#a0c5c5] font-bold">+10.0</span>
+              </div>
+              <div className="flex justify-between text-[14px] border-b border-[#1a2f2f] pb-1">
+                <span className="text-[#708080]">注意力 (FOC)</span>
+                <span className="text-[#a0c5c5] font-bold">+10.0</span>
+              </div>
+            </div>
+
+            <div className="mt-10 flex justify-center w-full">
+              <button
+                onClick={() => {
+                  s.status = 'playing';
+                  forceRender();
+                }}
+                className="px-8 py-3 bg-transparent border border-[#3a8f8f] text-[#3a8f8f] hover:bg-[#3a8f8f]/20 hover:text-white transition uppercase tracking-widest font-bold"
+              >
+                [ 彻底看穿 ]
               </button>
             </div>
           </div>
@@ -1625,69 +1807,69 @@ const ShopOverlay = ({ stateRef, forceRender }: { stateRef: React.MutableRefObje
   if (s.status !== 'shop') return null;
 
   const handleBuy = (item: string, cost: number, onBuy: () => void) => {
-     if (!s.debugInfiniteCoins && s.rustedCoins < cost) {
-        addLog(s, `❌ 你的记忆币不足以支付代价...`);
-        forceRender();
-        return;
-     }
-     if (!s.debugInfiniteCoins) s.rustedCoins -= cost;
-     onBuy();
-     playSound('absorb');
-     forceRender();
+    if (!s.debugInfiniteCoins && s.rustedCoins < cost) {
+      addLog(s, `❌ 你的记忆币不足以支付代价...`);
+      forceRender();
+      return;
+    }
+    if (!s.debugInfiniteCoins) s.rustedCoins -= cost;
+    onBuy();
+    playSound('absorb');
+    forceRender();
   };
 
   return (
-     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 font-mono">
-       <div className="absolute inset-0 bg-[#0a0000] opacity-30 pointer-events-none" />
-       
-       <div className="relative w-full max-w-3xl bg-[#0a0f0a] border-2 border-[#1a2f1a] p-6 sm:p-10 shadow-[0_0_50px_rgba(0,40,0,0.5)] overflow-hidden flex flex-col gap-6">
-          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,var(--color-theme-green)_10px,var(--color-theme-green)_11px)] opacity-[0.02] pointer-events-none" />
-          
-          <h2 className="text-[#a0c5a0] text-[24px] uppercase tracking-widest font-bold border-b border-[#1a2f1a] pb-2 text-center">
-             【盲眼的提灯拾荒者】
-          </h2>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 font-mono">
+      <div className="absolute inset-0 bg-[#0a0000] opacity-30 pointer-events-none" />
 
-          <div className="text-[14px] text-[#708070] italic text-center py-2">
-            “交出你收集的记忆币... 我会把这些小玩具借给你...”
-          </div>
+      <div className="relative w-full max-w-3xl bg-[#0a0f0a] border-2 border-[#1a2f1a] p-6 sm:p-10 shadow-[0_0_50px_rgba(0,40,0,0.5)] overflow-hidden flex flex-col gap-6">
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,var(--color-theme-green)_10px,var(--color-theme-green)_11px)] opacity-[0.02] pointer-events-none" />
 
-          <div className="text-right text-[#d4c3b5] text-[16px] font-bold">
-            当前持有: {s.debugInfiniteCoins ? '∞' : s.rustedCoins} 🪙 记忆币
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-             <button onClick={() => handleBuy('+5 力量', 10, () => { s.playerAttrs.strength += 5; addLog(s, '📦 拾荒者刺入了一股狂暴的铁锈入你体内，力量+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 局部肢体强化 (力量)</span>
-                <span className="text-[#d4c3b5]">10 🪙</span>
-             </button>
-             <button onClick={() => handleBuy('+5 耐力', 10, () => { s.playerAttrs.stamina += 5; addLog(s, '📦 拾荒者将粘稠的防腐剂灌入你的脉络，耐力+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 痛觉隔绝注射 (耐力)</span>
-                <span className="text-[#d4c3b5]">10 🪙</span>
-             </button>
-             <button onClick={() => handleBuy('时光沙漏', 20, () => { s.inventory.push('Hourglass'); addLog(s, '📦 获得了[时光沙漏]，可以直接瞬间重组属性。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-yellow-600 font-bold group-hover:text-yellow-400 transition">遗容碎片 [时光沙漏]</span>
-                <span className="text-[#d4c3b5]">20 🪙</span>
-             </button>
-             <button onClick={() => handleBuy('隐世药剂', 20, () => { s.inventory.push('EtherPotion'); addLog(s, '📦 获得了[隐世药剂]，使用后隐身30秒避开灾厄。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-cyan-600 font-bold group-hover:text-cyan-400 transition">深渊浓缩液 [隐世药剂]</span>
-                <span className="text-[#d4c3b5]">20 🪙</span>
-             </button>
-             <button onClick={() => handleBuy('厄运稻草人', 30, () => { s.inventory.push('StrawDoll'); addLog(s, '📦 获得了极度危险的[厄运稻草人]。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 30} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 30) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-purple-600 font-bold group-hover:text-purple-400 transition">受诅咒的扎草体 [厄运稻草人]</span>
-                <span className="text-[#d4c3b5]">30 🪙</span>
-             </button>
-             <button onClick={() => handleBuy('扩张血肉容槽', 25, () => { s.beast.maxSatiety = 150; s.beast.satiety += 50; addLog(s, '📦 拾荒者递给你一个扭动的肉块：[扩张血肉容槽]！地牢实体饱食度上限扩充至150%并回复了50。'); })} disabled={(s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${((s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)) ? 'opacity-30 cursor-not-allowed' : ''}`}>
-                <span className="text-red-500 font-bold group-hover:text-red-400 transition">扩张血肉容槽 (上限150%) {(s.beast.maxSatiety || 100) >= 150 && '[已扩充]'}</span>
-                <span className="text-[#d4c3b5]">25 🪙</span>
-             </button>
-          </div>
+        <h2 className="text-[#a0c5a0] text-[24px] uppercase tracking-widest font-bold border-b border-[#1a2f1a] pb-2 text-center">
+          【盲眼的提灯拾荒者】
+        </h2>
 
-          <div className="mt-4 flex justify-center">
-             <button onClick={() => { s.status = 'playing'; forceRender(); }} className="px-8 py-3 bg-transparent border border-[#708070] text-[#708070] hover:bg-[#708070]/20 hover:text-white transition uppercase tracking-widest font-bold">
-               [ 离开交易 ]
-             </button>
-          </div>
-       </div>
-     </div>
+        <div className="text-[14px] text-[#708070] italic text-center py-2">
+          “交出你收集的记忆币... 我会把这些小玩具借给你...”
+        </div>
+
+        <div className="text-right text-[#d4c3b5] text-[16px] font-bold">
+          当前持有: {s.debugInfiniteCoins ? '∞' : s.rustedCoins} 🪙 记忆币
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button onClick={() => handleBuy('+5 力量', 10, () => { s.playerAttrs.strength += 5; addLog(s, '📦 拾荒者刺入了一股狂暴的铁锈入你体内，力量+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 局部肢体强化 (力量)</span>
+            <span className="text-[#d4c3b5]">10 🪙</span>
+          </button>
+          <button onClick={() => handleBuy('+5 耐力', 10, () => { s.playerAttrs.stamina += 5; addLog(s, '📦 拾荒者将粘稠的防腐剂灌入你的脉络，耐力+5。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 10} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 10) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-[#a0c5a0] font-bold group-hover:text-white transition">+5 痛觉隔绝注射 (耐力)</span>
+            <span className="text-[#d4c3b5]">10 🪙</span>
+          </button>
+          <button onClick={() => handleBuy('时光沙漏', 20, () => { s.inventory.push('Hourglass'); addLog(s, '📦 获得了[时光沙漏]，可以直接瞬间重组属性。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-yellow-600 font-bold group-hover:text-yellow-400 transition">遗容碎片 [时光沙漏]</span>
+            <span className="text-[#d4c3b5]">20 🪙</span>
+          </button>
+          <button onClick={() => handleBuy('隐世药剂', 20, () => { s.inventory.push('EtherPotion'); addLog(s, '📦 获得了[隐世药剂]，使用后隐身30秒避开灾厄。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 20} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 20) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-cyan-600 font-bold group-hover:text-cyan-400 transition">深渊浓缩液 [隐世药剂]</span>
+            <span className="text-[#d4c3b5]">20 🪙</span>
+          </button>
+          <button onClick={() => handleBuy('厄运稻草人', 30, () => { s.inventory.push('StrawDoll'); addLog(s, '📦 获得了极度危险的[厄运稻草人]。'); })} disabled={!s.debugInfiniteCoins && s.rustedCoins < 30} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${(!s.debugInfiniteCoins && s.rustedCoins < 30) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-purple-600 font-bold group-hover:text-purple-400 transition">受诅咒的扎草体 [厄运稻草人]</span>
+            <span className="text-[#d4c3b5]">30 🪙</span>
+          </button>
+          <button onClick={() => handleBuy('扩张血肉容槽', 25, () => { s.beast.maxSatiety = 150; s.beast.satiety += 50; addLog(s, '📦 拾荒者递给你一个扭动的肉块：[扩张血肉容槽]！地牢实体饱食度上限扩充至150%并回复了50。'); })} disabled={(s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)} className={`p-3 border border-[#1a2f1a] hover:bg-[#1a2f1a]/50 text-left transition flex justify-between group ${((s.beast.maxSatiety || 100) >= 150 || (!s.debugInfiniteCoins && s.rustedCoins < 25)) ? 'opacity-30 cursor-not-allowed' : ''}`}>
+            <span className="text-red-500 font-bold group-hover:text-red-400 transition">扩张血肉容槽 (上限150%) {(s.beast.maxSatiety || 100) >= 150 && '[已扩充]'}</span>
+            <span className="text-[#d4c3b5]">25 🪙</span>
+          </button>
+        </div>
+
+        <div className="mt-4 flex justify-center">
+          <button onClick={() => { s.status = 'playing'; forceRender(); }} className="px-8 py-3 bg-transparent border border-[#708070] text-[#708070] hover:bg-[#708070]/20 hover:text-white transition uppercase tracking-widest font-bold">
+            [ 离开交易 ]
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -2112,84 +2294,84 @@ export default function App() {
     if (state.status === 'chasing') {
       const cd = state.chaseData;
       if (!cd) return;
-      
+
       const deathRadius = 0.6;
-      
+
       // Skill logic
       if (!cd.hasUsedSkill && cd.playerRooms - cd.monsterDistance >= 3.0) {
-          cd.hasUsedSkill = true;
-          cd.skillState = 'charging';
-          cd.skillTimer = 0;
-          cd.skillTargetRoom = cd.playerRooms;
-          addLog(state, '⚠️ 身后的追截虚无突然停滞，狂暴的能量在它周身翻涌聚集！');
+        cd.hasUsedSkill = true;
+        cd.skillState = 'charging';
+        cd.skillTimer = 0;
+        cd.skillTargetRoom = cd.playerRooms;
+        addLog(state, '⚠️ 身后的追截虚无突然停滞，狂暴的能量在它周身翻涌聚集！');
       }
 
       if (cd.skillState === 'charging') {
-          cd.skillTimer! += dt;
-          if (cd.skillTimer! >= 0.5) {
-              cd.skillState = 'striking';
-              cd.skillTimer = 0;
-              playSound('tower');
-              addLog(state, '⚔️ 虚无上下撕裂出漆黑的空洞，两股触手如利刃般暴射而出，完全锁死了前方和脚下的去路！');
-          }
+        cd.skillTimer! += dt;
+        if (cd.skillTimer! >= 0.5) {
+          cd.skillState = 'striking';
+          cd.skillTimer = 0;
+          playSound('tower');
+          addLog(state, '⚔️ 虚无上下撕裂出漆黑的空洞，两股触手如利刃般暴射而出，完全锁死了前方和脚下的去路！');
+        }
       } else if (cd.skillState === 'striking') {
-          cd.skillTimer! += dt;
-          
-          if (cd.skillTimer! >= 0.3) {
-             if (!cd.inSafeRoom && (cd.playerRooms === cd.skillTargetRoom || cd.playerRooms === cd.skillTargetRoom! + 1)) {
-                 if (!state.debugGodMode) {
-                     addLog(state, '🔴 追逐战失败：暴射的触手闪电般贯穿了你的身躯，将你拖入深渊。');
-                     state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-                     state.status = 'gameover';
-                     state.chaseData = undefined;
-                     return;
-                 }
-             }
-          }
-          
-          if (cd.skillTimer! >= 0.8) {
-              cd.skillState = undefined;
-              cd.skillTimer = undefined;
-              addLog(state, '一阵令人骨寒的撕裂声后，触手缩回了空洞，追踪怪物重新开始逼近...');
-          }
-      } else {
-          cd.monsterDistance += cd.speed * dt;
-          if (!cd.inSafeRoom && Math.abs(cd.monsterDistance - cd.playerRooms) < deathRadius) {
+        cd.skillTimer! += dt;
+
+        if (cd.skillTimer! >= 0.3) {
+          if (!cd.inSafeRoom && (cd.playerRooms === cd.skillTargetRoom || cd.playerRooms === cd.skillTargetRoom! + 1)) {
             if (!state.debugGodMode) {
-              addLog(state, '🔴 追逐战失败：身后的恶物将你拖入了虚无。');
-              state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-              state.status = 'gameover';
-              state.chaseData = undefined;
+              playSound('read_corrupt');
+              state.status = 'passage_failure';
               return;
             }
           }
+        }
+
+        if (cd.skillTimer! >= 0.8) {
+          cd.skillState = undefined;
+          cd.skillTimer = undefined;
+          addLog(state, '一阵令人骨寒的撕裂声后，触手缩回了空洞，追踪怪物重新开始逼近...');
+        }
+      } else {
+        cd.monsterDistance += cd.speed * dt;
+        if (!cd.inSafeRoom && Math.abs(cd.monsterDistance - cd.playerRooms) < deathRadius) {
+          if (!state.debugGodMode) {
+            playSound('read_corrupt');
+            state.status = 'passage_failure';
+            return;
+          }
+        }
       }
 
       if (cd.playerRooms >= 17 && cd.isUpPath && !cd.safeRoomSpawned) {
-          addLog(state, `⚠️ 空间重组：台阶深处的黑暗中，另一道扭曲的阴影[降临虚无]凭空显现，正向下极速逼近！`);
-          cd.frontMonsterDistance = 19;
-          cd.frontMonsterActive = true;
-          cd.safeRoomSpawned = true;
+        addLog(state, `⚠️ 空间重组：台阶深处的黑暗中，另一道扭曲的阴影[降临虚无]凭空显现，正向下极速逼近！`);
+        cd.frontMonsterDistance = 19;
+        cd.frontMonsterActive = true;
+        cd.safeRoomSpawned = true;
       }
 
       if (cd.frontMonsterActive && cd.frontMonsterDistance !== undefined) {
-         cd.frontMonsterDistance -= cd.speed * dt;
-         if (!cd.inSafeRoom && Math.abs(cd.frontMonsterDistance - cd.playerRooms) < deathRadius) {
-             if (!state.debugGodMode) {
-                 addLog(state, '🔴 追逐战失败：你与迎面而来的降临虚无撞了个满怀，灵魂被彻底撕碎。');
-                 state.playerAttrs = { stamina: 0, strength: 0, patience: 0, intelligence: 0, focus: 0 };
-                 state.status = 'gameover';
-                 state.chaseData = undefined;
-                 return;
-             }
-         }
+        cd.frontMonsterDistance -= cd.speed * dt;
+        if (!cd.inSafeRoom && Math.abs(cd.frontMonsterDistance - cd.playerRooms) < deathRadius) {
+          if (!state.debugGodMode) {
+            playSound('read_corrupt');
+            state.status = 'passage_failure';
+            return;
+          }
+        }
       }
 
       if (!cd.inSafeRoom && cd.playerRooms >= cd.targetRooms) {
         // escaped
-        state.rustedCoins += 15;
-        addLog(state, '✨ 追逐战胜利：你成功逃脱了怪物的围剿，回到了密道。拾取了 15 枚记忆币。');
-        state.status = 'playing';
+        state.rustedCoins += 30;
+        state.hasOmniscienceEye = true;
+        state.secretPassageCleared = true;
+        state.playerAttrs.intelligence += 10;
+        state.playerAttrs.focus += 10;
+        state.playerAttrs = snapAll(state.playerAttrs);
+
+        playSound('read_clear');
+        state.status = 'passage_victory';
         state.chaseData = undefined;
       }
       return;
@@ -2440,15 +2622,15 @@ export default function App() {
 
         const npcRoom = ROOMS[npc.loc];
         const nextRoomId = npc.nextLoc || npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
-        
+
         if (ROOMS[nextRoomId]) {
-            npc.loc = nextRoomId;
-            // Pre-calculate next destination for intent tracking
-            const newNpcRoom = ROOMS[npc.loc];
-            npc.nextLoc = newNpcRoom.adj[Math.floor(Math.random() * newNpcRoom.adj.length)];
+          npc.loc = nextRoomId;
+          // Pre-calculate next destination for intent tracking
+          const newNpcRoom = ROOMS[npc.loc];
+          npc.nextLoc = newNpcRoom.adj[Math.floor(Math.random() * newNpcRoom.adj.length)];
         } else {
-            console.error(`Invalid room target: ${nextRoomId}`);
-            npc.nextLoc = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
+          console.error(`Invalid room target: ${nextRoomId}`);
+          npc.nextLoc = npcRoom.adj[Math.floor(Math.random() * npcRoom.adj.length)];
         }
 
         npc.roomTimer = 0;
@@ -2494,13 +2676,13 @@ export default function App() {
         b.moveTimer = 0;
         const r = ROOMS[b.loc];
         const nextId = b.nextLoc || r.adj[Math.floor(Math.random() * r.adj.length)];
-        
+
         if (ROOMS[nextId]) {
-            b.loc = nextId;
-            const nextR = ROOMS[b.loc];
-            b.nextLoc = nextR.adj[Math.floor(Math.random() * nextR.adj.length)];
+          b.loc = nextId;
+          const nextR = ROOMS[b.loc];
+          b.nextLoc = nextR.adj[Math.floor(Math.random() * nextR.adj.length)];
         } else {
-            b.nextLoc = r.adj[Math.floor(Math.random() * r.adj.length)];
+          b.nextLoc = r.adj[Math.floor(Math.random() * r.adj.length)];
         }
 
         addLog(state, `⚠️ 狂暴怪物移动到了 [${ROOMS[nextId].name}]。`);
@@ -2781,8 +2963,8 @@ export default function App() {
         </div>
         <div className="flex items-center gap-[5px] sm:gap-[15px]">
           <div className="hidden sm:flex text-[10px] sm:text-[12px] bg-[#1a1410] border border-[#3d2b1f] text-[#a08b7a] px-2 py-1 items-center gap-2 shadow-[0_0_10px_rgba(61,43,31,0.5)_inset]">
-             <span>🪙 记忆币:</span>
-             <span className="font-bold text-[#d4c3b5]">{s.rustedCoins}</span>
+            <span>🪙 记忆币:</span>
+            <span className="font-bold text-[#d4c3b5]">{s.rustedCoins}</span>
           </div>
           <span className="text-[12px] hidden sm:block">生命体征</span>
           {/* Health Bar using Immersive UI pattern structure inside Header */}
@@ -2813,6 +2995,9 @@ export default function App() {
 
         <ShopOverlay stateRef={stateRef} forceRender={forceRender} />
         <ShopIntroOverlay stateRef={stateRef} forceRender={forceRender} />
+        <PassageIntroOverlay stateRef={stateRef} forceRender={forceRender} />
+        <PassageFailureOverlay stateRef={stateRef} forceRender={forceRender} />
+        <PassageVictoryOverlay stateRef={stateRef} forceRender={forceRender} />
         <ReadingOverlay stateRef={stateRef} forceRender={forceRender} />
         <DivinationOverlay stateRef={stateRef} />
         <WarningOverlay stateRef={stateRef} />
@@ -2828,21 +3013,21 @@ export default function App() {
           <LogsPanel stateRef={stateRef} />
 
           {/* Developer Debug Panel */}
-          <motion.div 
-            drag 
+          <motion.div
+            drag
             dragControls={dragControls}
             dragListener={false}
             dragMomentum={false}
             className="fixed top-[70px] right-2 z-[100] w-[260px] p-3 bg-black/80 backdrop-blur border border-blue-500/50 rounded flex flex-col gap-2 items-start text-blue-200 shadow-[0_0_15px_rgba(0,100,255,0.4)]"
           >
             <div className="flex justify-between items-center w-full border-b border-blue-500/30 pb-1 mb-1">
-              <div 
+              <div
                 onPointerDown={(e) => dragControls.start(e)}
                 className="text-[10px] uppercase font-bold tracking-widest opacity-80 cursor-grab active:cursor-grabbing select-none touch-none flex-1"
               >
                 /// Developer Dashboard ///
               </div>
-              <button 
+              <button
                 onClick={() => setIsDashboardCollapsed(!isDashboardCollapsed)}
                 className="text-blue-400 hover:text-white transition p-0.5"
                 title={isDashboardCollapsed ? "展开" : "收起"}
@@ -2854,153 +3039,153 @@ export default function App() {
             {!isDashboardCollapsed && (
               <div className="flex flex-col gap-2 items-start w-full">
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugInfiniteInvisibility}
-                onChange={(e) => {
-                  stateRef.current.debugInfiniteInvisibility = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-blue-500"
-              />
-              无限以太虚无 (绝对隐身)
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugInfiniteInvisibility}
+                    onChange={(e) => {
+                      stateRef.current.debugInfiniteInvisibility = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-blue-500"
+                  />
+                  无限以太虚无 (绝对隐身)
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugGodMode}
-                onChange={(e) => {
-                  stateRef.current.debugGodMode = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-red-500"
-              />
-              无敌状态 (隐身+免疫怪物与环境致死)
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugGodMode}
+                    onChange={(e) => {
+                      stateRef.current.debugGodMode = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-red-500"
+                  />
+                  无敌状态 (隐身+免疫怪物与环境致死)
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugInvincibleCombat}
-                onChange={(e) => {
-                  stateRef.current.debugInvincibleCombat = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-blue-500"
-              />
-              不死身 (战败不被夺走属性)
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugInvincibleCombat}
+                    onChange={(e) => {
+                      stateRef.current.debugInvincibleCombat = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-blue-500"
+                  />
+                  不死身 (战败不被夺走属性)
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugInfiniteSatiety}
-                onChange={(e) => {
-                  stateRef.current.debugInfiniteSatiety = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-blue-500"
-              />
-              地牢饲育器 (无限饱食度)
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugInfiniteSatiety}
+                    onChange={(e) => {
+                      stateRef.current.debugInfiniteSatiety = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-blue-500"
+                  />
+                  地牢饲育器 (无限饱食度)
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugInfiniteCoins}
-                onChange={(e) => {
-                  stateRef.current.debugInfiniteCoins = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-yellow-600"
-              />
-              无尽财富 (无限记忆币)
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugInfiniteCoins}
+                    onChange={(e) => {
+                      stateRef.current.debugInfiniteCoins = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-yellow-600"
+                  />
+                  无尽财富 (无限记忆币)
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
-              <input
-                type="checkbox"
-                checked={!!s.debugShowPaths}
-                onChange={(e) => {
-                  stateRef.current.debugShowPaths = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-blue-500"
-              />
-              显示全图寻路连接线
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugShowPaths}
+                    onChange={(e) => {
+                      stateRef.current.debugShowPaths = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-blue-500"
+                  />
+                  显示全图寻路连接线
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-green-400">
-              <input
-                type="checkbox"
-                checked={!!s.debugDisableGreenMidnight}
-                onChange={(e) => {
-                  stateRef.current.debugDisableGreenMidnight = e.target.checked;
-                  if (e.target.checked && stateRef.current.greenMidnight.active) {
-                    stateRef.current.greenMidnight.active = false;
-                    stateRef.current.greenMidnight.timer = 0;
-                  }
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-green-500"
-              />
-              禁止绿色午夜按钮
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-green-400">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugDisableGreenMidnight}
+                    onChange={(e) => {
+                      stateRef.current.debugDisableGreenMidnight = e.target.checked;
+                      if (e.target.checked && stateRef.current.greenMidnight.active) {
+                        stateRef.current.greenMidnight.active = false;
+                        stateRef.current.greenMidnight.timer = 0;
+                      }
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-green-500"
+                  />
+                  禁止绿色午夜按钮
+                </label>
 
-            <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-purple-400">
-              <input
-                type="checkbox"
-                checked={!!s.debugShowIntentions}
-                onChange={(e) => {
-                  stateRef.current.debugShowIntentions = e.target.checked;
-                  forceRender();
-                }}
-                className="w-3 h-3 accent-purple-500"
-              />
-              显示怪物意图追踪
-            </label>
+                <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full text-purple-400">
+                  <input
+                    type="checkbox"
+                    checked={!!s.debugShowIntentions}
+                    onChange={(e) => {
+                      stateRef.current.debugShowIntentions = e.target.checked;
+                      forceRender();
+                    }}
+                    className="w-3 h-3 accent-purple-500"
+                  />
+                  显示怪物意图追踪
+                </label>
 
-            <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
-              <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
-              <button
-                onClick={() => {
-                  const isAc = stateRef.current.greenMidnight.active;
-                  if (isAc) {
-                    stateRef.current.greenMidnight.active = false;
-                    stateRef.current.greenMidnight.timer = 0;
-                    stateRef.current.logs.push(`[开发者] 强制中止 [绿色的午夜]`);
-                  } else {
-                    stateRef.current.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
-                    stateRef.current.logs.push(`[开发者] 强制触发 [绿色的午夜]`);
-                  }
-                  forceRender();
-                }}
-                className="bg-green-900/40 hover:bg-green-700 border border-green-500 text-[10px] px-2 py-1 text-white transition flex-1"
-              >
-                {s.greenMidnight.active ? '中止 绿色的午夜' : '触发 [绿色的午夜]'}
-              </button>
-            </div>
+                <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
+                  <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
+                  <button
+                    onClick={() => {
+                      const isAc = stateRef.current.greenMidnight.active;
+                      if (isAc) {
+                        stateRef.current.greenMidnight.active = false;
+                        stateRef.current.greenMidnight.timer = 0;
+                        stateRef.current.logs.push(`[开发者] 强制中止 [绿色的午夜]`);
+                      } else {
+                        stateRef.current.greenMidnight = { active: true, timer: 0, angle: 0, hitCooldown: 0 };
+                        stateRef.current.logs.push(`[开发者] 强制触发 [绿色的午夜]`);
+                      }
+                      forceRender();
+                    }}
+                    className="bg-green-900/40 hover:bg-green-700 border border-green-500 text-[10px] px-2 py-1 text-white transition flex-1"
+                  >
+                    {s.greenMidnight.active ? '中止 绿色的午夜' : '触发 [绿色的午夜]'}
+                  </button>
+                </div>
 
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-500/30 w-full justify-between">
-              <input id="devInputTotal" type="number" placeholder="总属性 (例: 100)" className="w-[120px] bg-[#001] border border-blue-500/50 text-[11px] px-1.5 py-1 text-white outline-none" />
-              <button
-                onClick={() => {
-                  const val = parseFloat((document.getElementById('devInputTotal') as HTMLInputElement).value);
-                  if (val > 0) {
-                    const each = snapVal(val / 5);
-                    stateRef.current.playerAttrs = { stamina: each, strength: each, patience: each, intelligence: each, focus: each };
-                    stateRef.current.logs.push(`[开发者] 强制均分总属性为 ${val} (${each}x5)`);
-                    forceRender();
-                  }
-                }}
-                className="bg-blue-900/50 hover:bg-blue-600 border border-blue-500 text-[11px] px-2 py-1 text-white transition flex-1 cursor-pointer"
-              >
-                设置总和
-              </button>
-            </div>
-          </div>
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-blue-500/30 w-full justify-between">
+                  <input id="devInputTotal" type="number" placeholder="总属性 (例: 100)" className="w-[120px] bg-[#001] border border-blue-500/50 text-[11px] px-1.5 py-1 text-white outline-none" />
+                  <button
+                    onClick={() => {
+                      const val = parseFloat((document.getElementById('devInputTotal') as HTMLInputElement).value);
+                      if (val > 0) {
+                        const each = snapVal(val / 5);
+                        stateRef.current.playerAttrs = { stamina: each, strength: each, patience: each, intelligence: each, focus: each };
+                        stateRef.current.logs.push(`[开发者] 强制均分总属性为 ${val} (${each}x5)`);
+                        forceRender();
+                      }
+                    }}
+                    className="bg-blue-900/50 hover:bg-blue-600 border border-blue-500 text-[11px] px-2 py-1 text-white transition flex-1 cursor-pointer"
+                  >
+                    设置总和
+                  </button>
+                </div>
+              </div>
             )}
           </motion.div>
         </aside>
