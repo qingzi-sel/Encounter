@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, Shield, Swords, User, Map as MapIcon, Footprints, RotateCw } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Activity, Shield, Swords, User, Map as MapIcon, Footprints, RotateCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 
 // --- Global Audio Helper ---
 const playSound = (type: 'start' | 'reveal' | 'tower' | 'read_start' | 'read_click' | 'read_clear' | 'read_corrupt' | 'warning' | 'move' | 'hit') => {
@@ -1917,6 +1917,8 @@ const WarningOverlay = ({ stateRef }: { stateRef: React.MutableRefObject<GameSta
 export default function App() {
   const stateRef = useRef<GameState>(getInitialGameState());
   const [renderTick, setRenderTick] = useState(0);
+  const dragControls = useDragControls();
+  const [isDashboardCollapsed, setIsDashboardCollapsed] = useState(false);
 
   // Forced re-render loop for UI sync
   useEffect(() => {
@@ -2812,8 +2814,31 @@ export default function App() {
           <LogsPanel stateRef={stateRef} />
 
           {/* Developer Debug Panel */}
-          <div className="fixed top-[70px] right-2 z-[100] w-[260px] p-3 bg-black/80 backdrop-blur border border-blue-500/50 rounded flex flex-col gap-2 items-start text-blue-200 shadow-[0_0_15px_rgba(0,100,255,0.4)]">
-            <div className="text-[10px] uppercase font-bold tracking-widest opacity-80 border-b border-blue-500/30 w-full pb-1 mb-1 shadow-[0_1px_5px_rgba(0,100,255,0.2)]">/// Developer Dashboard ///</div>
+          <motion.div 
+            drag 
+            dragControls={dragControls}
+            dragListener={false}
+            dragMomentum={false}
+            className="fixed top-[70px] right-2 z-[100] w-[260px] p-3 bg-black/80 backdrop-blur border border-blue-500/50 rounded flex flex-col gap-2 items-start text-blue-200 shadow-[0_0_15px_rgba(0,100,255,0.4)]"
+          >
+            <div className="flex justify-between items-center w-full border-b border-blue-500/30 pb-1 mb-1">
+              <div 
+                onPointerDown={(e) => dragControls.start(e)}
+                className="text-[10px] uppercase font-bold tracking-widest opacity-80 cursor-grab active:cursor-grabbing select-none touch-none flex-1"
+              >
+                /// Developer Dashboard ///
+              </div>
+              <button 
+                onClick={() => setIsDashboardCollapsed(!isDashboardCollapsed)}
+                className="text-blue-400 hover:text-white transition p-0.5"
+                title={isDashboardCollapsed ? "展开" : "收起"}
+              >
+                {isDashboardCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              </button>
+            </div>
+
+            {!isDashboardCollapsed && (
+              <div className="flex flex-col gap-2 items-start w-full">
 
             <label className="flex items-center gap-2 text-[11px] cursor-pointer hover:text-white transition w-full">
               <input
@@ -2962,6 +2987,8 @@ export default function App() {
               </button>
             </div>
           </div>
+            )}
+          </motion.div>
         </aside>
 
       </div>
