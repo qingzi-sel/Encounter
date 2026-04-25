@@ -327,6 +327,7 @@ interface GameState {
   debugForceSeal?: boolean;
   debugDisableGreenMidnight?: boolean;
   difficulty: 'easy' | 'normal' | 'nightmare';
+  glitchCycle: number;
   rustedCoins: number;
   hasMetScavenger?: boolean;
   hasOmniscienceEye?: boolean;
@@ -479,6 +480,7 @@ function getInitialGameState(): GameState {
       nextLoc: 'WineCellar',
     },
     isFeedingBeast: false,
+    glitchCycle: 60,
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
       { id: 1, color: '#2563eb', name: '深蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'Kitchen' },
@@ -2323,16 +2325,16 @@ const CORRUPTION_MAP: Record<string, Record<string, string>> = {
   }
 };
 
-const CorruptedText = ({ text, color, tick }: { text: string, color: string, tick: number }) => {
+const CorruptedText = ({ text, color, tick, stateRef }: { text: string, color: string, tick: number, stateRef?: React.MutableRefObject<GameState> }) => {
   const map = CORRUPTION_MAP[color];
   if (!map) return <span>{text}</span>;
 
   const keys = Object.keys(map);
   if (keys.length === 0) return <span>{text}</span>;
 
-  // Each cycle is ~1.2 seconds (60 ticks)
-  const cycle = 60;
-  const glitchDuration = 20; // ~0.4s
+  // Use dynamic cycle from state or default to 60
+  const cycle = stateRef?.current?.glitchCycle || 60;
+  const glitchDuration = Math.max(10, Math.floor(cycle * 0.3)); // Glitch for 30% of the cycle, at least 0.2s
   
   const currentCycleIndex = Math.floor(tick / cycle);
   const cycleProgress = tick % cycle;
@@ -2390,7 +2392,7 @@ const CombatDialogOverlay = ({ stateRef, tick }: { stateRef: React.MutableRefObj
             >
               {cd.dialogText.split('\n').map((para, idx) => (
                 <p key={idx} className="mb-3 last:mb-0 indent-8">
-                  <CorruptedText text={para} color={npc.color} tick={tick + idx * 12} />
+                  <CorruptedText text={para} color={npc.color} tick={tick + idx * 12} stateRef={stateRef} />
                 </p>
               ))}
             </motion.div>
@@ -3753,6 +3755,29 @@ export default function App() {
                   />
                   绝对封印 (强制怪物回笼)
                 </label>
+                
+                <div className="w-full flex flex-col gap-1 border-t border-blue-500/30 pt-2 mt-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-blue-300 uppercase font-bold tracking-widest">文本污染频率 (低 → 高)</span>
+                    <span className="text-[10px] font-mono text-white bg-blue-900/50 px-1">{(1.0 / (s.glitchCycle * 0.02)).toFixed(1)} Hz</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="20" 
+                    max="500" 
+                    step="10"
+                    value={s.glitchCycle}
+                    onChange={(e) => {
+                      stateRef.current.glitchCycle = parseInt(e.target.value);
+                      forceRender();
+                    }}
+                    className="w-full h-1 bg-blue-900 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                  />
+                  <div className="flex justify-between text-[8px] text-blue-500/70">
+                    <span>疯狂 (0.4s)</span>
+                    <span>隐晦 (10s)</span>
+                  </div>
+                </div>
 
                 <div className="w-full flex items-center justify-between gap-2 border-t border-blue-500/30 pt-2 mt-1">
                   <div className="text-[11px] shrink-0 text-green-400">随机事件调试:</div>
