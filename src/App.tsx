@@ -213,7 +213,7 @@ const ROOMS: Record<RoomId, RoomDef> = {
     name: '大图书馆', 
     attrs: ['intelligence'], 
     adj: ['GreatHall', 'AlchemyLab'],
-    desc: '书架上排列着无数用人皮装订的厚重书籍。当你路过时，书页会自发地翻动，发出如同无数个声音在同时低语的沙沙声。'
+    desc: '书架上排列着无数用人皮装订的厚重书籍。当你路过时，书页会自发地翻动，发出如同无数个声音在同时低语的沙沙声。\n\n等等，在那些布满粘稠灰尘的古籍残卷之间，竟然挤着一本装帧极其违和、封皮甚至有些锃亮的《2026王道计算机考研计算机组成原理》。你好奇地随便翻开一页，那里的空白处被密密麻麻的红蓝水笔批注占领，页角卷边严重，还残留着几点干涸的咖啡渍。你读到一行字：“请简述程序，指令，微程序，微指令，微命令，微操作之间的关系”……这些文字不再跳动，而是透着一种比深渊更令人绝望的、属于异世界凡人的勤勉。这是一本真正的禁书。'
   },
   Observatory: { 
     id: 'Observatory', 
@@ -471,6 +471,8 @@ interface GameState {
   logs: string[];
   showWarningTimer: number;
   showRoomDesc: boolean;
+  libraryEggPhase: number; // 0: hidden, 1: typing, 2: done
+  libraryEggProgress: number; 
 }
 
 // --- Logic Helpers ---
@@ -604,6 +606,8 @@ function getInitialGameState(): GameState {
     isFeedingBeast: false,
     glitchCycle: 60,
     showRoomDesc: false,
+    libraryEggPhase: 0,
+    libraryEggProgress: 0,
     npcs: [
       { id: 0, color: 'white', name: '苍白幽影', loc: 'Watchtower', attrs: { stamina: 4, strength: 4, patience: 4, intelligence: 4, focus: 4 }, moveTimer: 0, nextMoveWait: 2.0, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'GreatHall' },
       { id: 1, color: '#2563eb', name: '深蓝巡卫', loc: 'WineCellar', attrs: { stamina: 8, strength: 8, patience: 8, intelligence: 8, focus: 8 }, moveTimer: 0, nextMoveWait: 2.2, roomTimer: 0, adaptedInRoom: false, isDead: false, nextLoc: 'Kitchen' },
@@ -2768,11 +2772,47 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
   if (!s.showRoomDesc) return null;
   const room = ROOMS[s.playerLoc];
 
+  const isLibrary = String(s.playerLoc) === 'GrandLibrary';
+  const fullText = room.desc || "";
+  const parts = fullText.split('\n\n');
+  const normalText = parts[0];
+  const eggText = parts[1] || "";
+
+  // Typewriter effect logic
+  useEffect(() => {
+    if (isLibrary && s.libraryEggPhase === 1) {
+      const timer = setInterval(() => {
+        if (s.libraryEggProgress < eggText.length) {
+          s.libraryEggProgress += 1;
+          forceRender();
+        } else {
+          s.libraryEggPhase = 2;
+          clearInterval(timer);
+          forceRender();
+        }
+      }, 40);
+      return () => clearInterval(timer);
+    }
+  }, [isLibrary, s.libraryEggPhase, eggText.length]);
+
+  const handleReturn = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isLibrary && s.libraryEggPhase === 0) {
+      s.libraryEggPhase = 1;
+      s.libraryEggProgress = 0;
+      forceRender();
+      return;
+    }
+    if (isLibrary && s.libraryEggPhase === 1) return;
+    s.showRoomDesc = false;
+    forceRender();
+  };
+
   return (
     <div className="absolute inset-0 z-[120] pointer-events-none flex items-center justify-center p-4">
       <div 
         className="absolute inset-0 bg-black/85 backdrop-blur-md pointer-events-auto" 
-        onClick={() => { s.showRoomDesc = false; forceRender(); }}
+        onClick={handleReturn}
       />
 
       <motion.div
@@ -2787,7 +2827,7 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-mono text-theme-cyan/60 animate-pulse">LOC: {room.id.toUpperCase()}</span>
             <button 
-              onClick={() => { s.showRoomDesc = false; forceRender(); }}
+              onClick={handleReturn}
               className="text-theme-text/40 hover:text-white transition"
             >
               <X size={16} />
@@ -2802,16 +2842,49 @@ const RoomDescriptionOverlay = ({ stateRef, forceRender, tick }: { stateRef: Rea
             <div className="w-12 h-px bg-theme-cyan/30" />
           </div>
 
-          <div className="text-[15px] sm:text-[17px] leading-[2.2] text-theme-text/90 font-serif tracking-wide text-justify indent-8 min-h-[120px]">
-            <CorruptedText text={room.desc} color="white" tick={tick} stateRef={stateRef} />
+          <div className="text-[15px] sm:text-[17px] leading-[2.2] text-theme-text/90 font-serif tracking-wide text-justify min-h-[120px]">
+            {/* Normal Text Part */}
+            <p className="indent-8">
+              <CorruptedText text={normalText} color="white" tick={tick} stateRef={stateRef} />
+            </p>
+
+            {/* Easter Egg Part - Dynamic */}
+            {isLibrary && (s.libraryEggPhase >= 1) && (
+              <p className="mt-6 indent-8 text-theme-cyan/90">
+                <CorruptedText 
+                  text={eggText.slice(0, s.libraryEggProgress)} 
+                  color="white" 
+                  tick={tick + 50} 
+                  stateRef={stateRef} 
+                />
+                {s.libraryEggPhase === 1 && <span className="inline-block w-2 h-4 bg-theme-cyan ml-1 animate-pulse" />}
+              </p>
+            )}
+
+            {!isLibrary && room.desc.split('\n\n').slice(1).map((p, i) => (
+               <p key={i} className="mt-4 indent-8">
+                  <CorruptedText text={p} color="white" tick={tick + i * 20} stateRef={stateRef} />
+               </p>
+            ))}
           </div>
           
           <div className="mt-10 flex justify-center">
             <button
-              onClick={() => { s.showRoomDesc = false; forceRender(); }}
-              className="px-10 py-2 border border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan transition-all uppercase text-[11px] tracking-[4px] font-bold"
+              onClick={handleReturn}
+              className={`px-10 py-2 border transition-all uppercase text-[11px] tracking-[4px] font-bold ${
+                isLibrary && s.libraryEggPhase === 1 
+                  ? 'border-gray-800 text-gray-600 cursor-not-allowed' 
+                  : 'border-theme-cyan/30 text-theme-cyan/60 hover:border-theme-cyan hover:text-theme-cyan'
+              }`}
+              disabled={isLibrary && s.libraryEggPhase === 1}
             >
-              [ 闭目冥思 ] 返回现实
+              {isLibrary && s.libraryEggPhase === 0 
+                ? '[ 闭目冥思 ] 返回现实' 
+                : isLibrary && s.libraryEggPhase === 1
+                ? '…… 等等，那是？'
+                : isLibrary && s.libraryEggPhase === 2
+                ? '[ 颤抖 ] 离开这里'
+                : '[ 闭目冥思 ] 返回现实'}
             </button>
           </div>
         </div>
